@@ -1,0 +1,45 @@
+.status-indicator {
+  --tone: var(--neutral);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--tone) 40%, var(--border));
+  border-radius: 999px;
+  padding: 6px 16px 6px 14px;
+  background: color-mix(in srgb, var(--tone) 8%, var(--bg));
+  color: var(--text);
+  font-size: 14px;
+}
+
+.status-indicator--success {
+  --tone: var(--success);
+}
+
+.status-indicator--danger {
+  --tone: var(--danger);
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 25%, transparent);
+}
+
+.status-indicator--success .status-indicator-dot {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--tone) 10%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-indicator--success .status-indicator-dot {
+    animation: none;
+  }
+}

@@ -41,11 +41,13 @@ constexpr const char *MQTT_COMMAND_TOPIC = "esp8266/led";
 constexpr const char *MQTT_STATUS_TOPIC = "esp8266/status";
 constexpr uint16_t MQTT_BUFFER_SIZE = 512;
 constexpr uint16_t MQTT_KEEPALIVE_S = 15;
+// Mesures rejouees par tour de loop() apres une coupure (taille du tampon :
+// kOfflineBufferSize dans lib/sentinel_core/src/application/sentinel.h).
+constexpr uint8_t REPLAY_BATCH = 5;
 
 // --- Securite locale (fail-safe independant du serveur) --------------------
-// Alarme physique si le gaz depasse ce seuil brut (0-1023), meme sans reseau.
-// La detection d'anomalies predictive reste du ressort de l'IA cote serveur.
-// 0 desactive le fail-safe.
+// Alarme physique si le gaz depasse ce seuil brut (0-1023), meme sans reseau
+// (voir GasFailsafe). 0 desactive le fail-safe.
 constexpr int GAS_FAILSAFE_THRESHOLD = 700;
 constexpr int GAS_FAILSAFE_HYSTERESIS = 50;
 constexpr unsigned long GAS_WARMUP_MS = 60000;  // prechauffage du MQ-2

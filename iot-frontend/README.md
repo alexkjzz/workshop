@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Interface web SENTINEL-X
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Application React/Vite : page de connexion, page Metriques (etat du broker,
+valeurs courantes, graphiques temps reel et tableaux des valeurs precedentes),
+page Camera (flux de la webcam et reconnaissance faciale) et page Parametres
+(notifications par e-mail). Theme clair/sombre (suit le
+systeme jusqu'au premier choix).
 
-Currently, two official plugins are available:
+## Architecture (clean architecture)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+src/
+  domain/          types et regles pures (fusion de l'historique, fraicheur
+                   d'une detection, series de valeurs)
+  application/     ports : DeviceApi, SettingsApi, LiveFeed, AuthService, ThemeStore
+  infrastructure/  adaptateurs : fetch (/api), EventSource (/api/stream),
+                   client Better Auth, localStorage
+  presentation/    composants, pages et hooks React ; les services sont
+                   injectes par ServicesContext
+  main.tsx         composition root : instancie les adaptateurs concrets
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Les composants ne connaissent que les ports : remplacer le transport (REST,
+SSE) ou l'authentification ne touche pas a la presentation.
+
+## Commandes
+
+```sh
+npm run dev      # Vite, /api relaye vers http://127.0.0.1:3001
+npm test         # regles du domaine (test runner integre a Node)
+npm run lint
+npm run build
+```
+
+En production, l'image Docker sert le build avec nginx (`nginx.conf`), qui
+relaie `/api` vers le backend et applique les en-tetes de securite (CSP).
+`public/theme-init.js` applique le theme avant le premier affichage ; c'est un
+fichier externe pour rester compatible avec la CSP.

@@ -1,0 +1,100 @@
+.dashboard {
+  width: min(100% - 32px, 760px);
+  margin: auto;
+  padding: 40px 0 56px;
+}
+
+.page-header {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.dashboard h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.reading-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+  margin: 0;
+}
+
+.reading {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 0 20px;
+}
+
+.reading dt {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.reading dd {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.commands {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.command-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.command-buttons button {
+  min-width: 120px;
+  min-height: 42px;
+  border: 1px solid var(--button-bg);
+  padding: 8px 16px;
+  color: var(--button-text);
+  background: var(--button-bg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.command-buttons button:hover:not(:disabled) {
+  color: var(--button-bg);
+  background: var(--bg);
+}
+
+.command-buttons button:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 3px;
+}
+
+.command-buttons button:disabled {
+  color: var(--disabled-text);
+  border-color: var(--disabled-border);
+  background: var(--disabled-bg);
+  cursor: not-allowed;
+}
+
+.message {
+  min-height: 1.5em;
+  margin-top: 12px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .dashboard {
+    padding: 28px 0;
+  }
+
+  .reading-grid {
+    grid-template-columns: 1fr;
+  }
+}

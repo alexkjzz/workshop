@@ -1,0 +1,83 @@
+.chart {
+  position: relative;
+  height: 128px;
+  margin-top: 12px;
+}
+
+.chart svg {
+  display: block;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+.chart--empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.chart-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: var(--series);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+
+.chart-point {
+  fill: var(--series);
+}
+
+.chart-dot {
+  fill: var(--series);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+.chart-crosshair {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: -6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  background: var(--bg);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+}
+
+.chart-tooltip span {
+  color: var(--text-muted);
+}
+
+.chart-tooltip strong {
+  color: var(--text);
+  font-weight: 600;
+}

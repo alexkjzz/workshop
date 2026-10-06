@@ -1,40 +1,33 @@
 // SENTINEL-X - Edge Node ESP8266
-// Capteurs DHT22 / MQ-2 / PIR -> JSON sur MQTTS, commandes distantes -> LEDs et buzzer.
+// Composition root : assemble le coeur (lib/sentinel_core) et les adaptateurs Arduino.
 
 #include <Arduino.h>
 
-#include "actuators.h"
+#include "application/sentinel.h"
 #include "config.h"
-#include "display.h"
-#include "readings.h"
-#include "sensors.h"
-#include "uplink.h"
+#include "domain/gas_failsafe.h"
+#include "infrastructure/board_sensors.h"
+#include "infrastructure/gpio_actuators.h"
+#include "infrastructure/mqtts_link.h"
+#include "infrastructure/oled_display.h"
+#include "infrastructure/serial_logger.h"
+#include "infrastructure/system_clock.h"
 
 namespace {
 
-Readings readings;
-unsigned long lastSampleAt = 0;
-unsigned long lastPublishAt = 0;
-unsigned long lastDisplayAt = 0;
-bool gasAlarm = false;
+BoardSensors sensors;
+GpioActuators actuators;
+MqttsLink link;
+OledDisplay display;
+SystemClock systemClock;
+SerialLogger logger;
+GasFailsafe failsafe(GAS_FAILSAFE_THRESHOLD, GAS_FAILSAFE_HYSTERESIS, GAS_WARMUP_MS);
 
-void onCommand(const char *command) {
-  if (!actuators::handleCommand(command)) {
-    Serial.printf("[CMD] commande inconnue : %s\n", command);
-  }
-}
+const SentinelSettings settings{SAMPLE_INTERVAL_MS, PUBLISH_INTERVAL_MS, DISPLAY_INTERVAL_MS, REPLAY_BATCH};
+Sentinel sentinel(sensors, actuators, link, display, systemClock, logger, failsafe, settings);
 
-// Fail-safe local avec hysteresis, ignore pendant le prechauffage du MQ-2.
-bool evaluateGasFailsafe(unsigned long now) {
-  if (GAS_FAILSAFE_THRESHOLD <= 0 || now < GAS_WARMUP_MS) {
-    return false;
-  }
-  if (readings.gas >= GAS_FAILSAFE_THRESHOLD) {
-    gasAlarm = true;
-  } else if (readings.gas < GAS_FAILSAFE_THRESHOLD - GAS_FAILSAFE_HYSTERESIS) {
-    gasAlarm = false;
-  }
-  return gasAlarm;
+void onCommand(const char *payload, size_t length) {
+  sentinel.handleCommand(payload, length);
 }
 
 }  // namespace
@@ -44,37 +37,14 @@ void setup() {
   Serial.println();
   Serial.printf("SENTINEL-X %s - demarrage\n", DEVICE_ID);
 
-  actuators::begin();
-  display::begin();
-  sensors::begin();
-  uplink::begin(onCommand);
-
-  // Force un premier echantillon des le premier tour de loop().
-  lastSampleAt = millis() - SAMPLE_INTERVAL_MS;
+  actuators.begin();
+  display.begin();
+  sensors.begin();
+  link.begin(onCommand);
+  sentinel.begin(millis());
 }
 
 void loop() {
-  uplink::loop();
-  const unsigned long now = millis();
-
-  if (now - lastSampleAt >= SAMPLE_INTERVAL_MS) {
-    lastSampleAt = now;
-    sensors::sample(readings);
-    actuators::setFailsafeAlarm(evaluateGasFailsafe(now));
-  }
-
-  // Un changement du PIR est publie immediatement pour une alerte reactive.
-  const bool presenceChanged = sensors::pollPresence(readings);
-  if (presenceChanged || now - lastPublishAt >= PUBLISH_INTERVAL_MS) {
-    if (uplink::publishTelemetry(readings)) {
-      lastPublishAt = now;
-    }
-  }
-
-  actuators::loop(now, uplink::online());
-
-  if (now - lastDisplayAt >= DISPLAY_INTERVAL_MS) {
-    lastDisplayAt = now;
-    display::render(readings, uplink::stateLabel(), actuators::alarmActive());
-  }
+  link.loop();
+  sentinel.tick(millis());
 }

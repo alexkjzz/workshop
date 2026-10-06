@@ -21,15 +21,40 @@ commande du dashboard.
 Toutes les masses sont communes. Le brochage, les intervalles et les seuils se
 modifient dans [include/config.h](include/config.h).
 
+## Architecture (clean architecture)
+
+```
+lib/sentinel_core/        coeur en C++ pur, sans dependance Arduino
+  src/domain/             commandes, fail-safe gaz, etat des alarmes,
+                          tampon hors ligne, mesures
+  src/application/        ports (Sensors, Actuators, TelemetryLink,
+                          StatusDisplay, Clock, Logger) et orchestrateur Sentinel
+src/
+  infrastructure/         adaptateurs Arduino : capteurs DHT22/MQ-2/PIR, GPIO,
+                          liaison Wi-Fi + MQTTS, ecran OLED, horloge NTP, journal serie
+  main.cpp                composition root
+test/test_core/           tests Unity du coeur, executes sur l'ordinateur
+```
+
+Le coeur decide quand mesurer, publier, mettre en tampon et alerter ; les
+adaptateurs ne font que parler au materiel. Il se teste sans carte :
+
+```sh
+pio test -e native
+```
+
 ## Comportement
 
 - Mesures toutes les 2 s (DHT22, MQ-2 moyenne sur 8 echantillons, PIR) publiees
   sur `esp8266/donnees`. Un changement d'etat du PIR est publie immediatement.
-- Format JSON, compatible avec `iot-backend/src/telemetry.ts` :
+- Format JSON, compatible avec `iot-backend/src/infrastructure/messaging/messages.ts` :
 
   ```json
-  {"device":"sentinel-x-01","temperature":22.5,"humidity":48.0,"gas":123,"presence":false,"rssi":-61}
+  {"device":"sentinel-x-01","ts":1791280000,"temperature":22.5,"humidity":48.0,"gas":123,"presence":false,"rssi":-61}
   ```
+
+  `ts` (epoch en secondes) date la mesure ; il est omis tant que l'heure n'est
+  pas synchronisee par NTP.
 
   `gas` est la valeur brute de l'ADC (0-1023). `temperature` et `humidity` sont
   omises si la lecture du DHT22 echoue (le backend rejetterait un `NaN`).
@@ -51,6 +76,10 @@ modifient dans [include/config.h](include/config.h).
   Ce n'est pas la detection d'anomalies (qui reste l'IA cote serveur) mais une
   securite physique ; `GAS_FAILSAFE_THRESHOLD = 0` la desactive.
 - Reconnexion Wi-Fi automatique et reconnexion MQTT avec backoff (2 s a 30 s).
+- Tampon hors ligne : pendant une coupure, les mesures horodatees sont
+  conservees (150 mesures, soit 5 min) puis rejouees a la reconnexion, de la
+  plus ancienne a la plus recente. Le backend les range a leur date :
+  l'historique du dashboard n'a pas de trou.
 
 ## Securite TLS
 

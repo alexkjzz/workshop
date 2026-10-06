@@ -34,10 +34,35 @@ gestionnaire de paquets du systeme avant de lancer `bash install.sh`.
 
 ## Structure Du Projet
 
-- `iot-backend/` : API Express et connexion MQTT.
-- `iot-frontend/` : application React/Vite.
+- `iot-backend/` : API Express, MQTT, historique SQLite, voir [iot-backend/README.md](iot-backend/README.md).
+- `iot-frontend/` : application React/Vite (pages Metriques et Camera), voir [iot-frontend/README.md](iot-frontend/README.md).
 - `firmware/` : firmware ESP8266 (PlatformIO, MQTTS), voir [firmware/README.md](firmware/README.md).
 - `install.sh`, `run.sh`, `stop.sh` : installation, demarrage et arret.
+- `docker-compose.yml` : stack web conteneurisee (voir [Docker](#docker)).
+
+## Architecture
+
+Les trois projets suivent la clean architecture : les regles metier ne
+dependent d'aucun framework, et les dependances pointent toujours vers le
+centre.
+
+| Couche | Role | Backend | Frontend | Firmware |
+| --- | --- | --- | --- | --- |
+| Domaine | entites et regles pures | `src/domain` | `src/domain` | `lib/sentinel_core/src/domain` |
+| Application | cas d'usage et ports (interfaces) | `src/application` | `src/application` | `lib/sentinel_core/src/application` |
+| Infrastructure | adaptateurs techniques | `src/infrastructure` (SQLite, MQTT, Better Auth, camera) | `src/infrastructure` (fetch, SSE, Better Auth, localStorage) | `src/infrastructure` (capteurs, GPIO, MQTTS, OLED, NTP) |
+| Presentation | interface utilisateur / HTTP | `src/presentation/http` (Express) | `src/presentation` (React) | ecran OLED (adaptateur) |
+| Composition | assemble les implementations | `src/main.ts` | `src/main.tsx` | `src/main.cpp` |
+
+Le domaine et l'application se testent sans broker, sans base, sans
+navigateur ni carte : faux adaptateurs en memoire cote serveur, `pio test -e
+native` cote firmware.
+
+```
+ESP8266 --MQTTS--> Mosquitto --MQTT--> backend --SQLite--> historique
+                                          |  \--REST + SSE--> dashboard (Metriques)
+script vision IA --MJPEG + MQTT--------->/   \--relais camera--> dashboard (Camera)
+```
 
 ## Demarrage Et Arret
 
@@ -48,10 +73,22 @@ bash run.sh
 ```
 
 Le script lance le **mode test local sans carte IoT** : Mosquitto, le backend,
-Vite et un simulateur MQTT en arriere-plan. Le backend et le frontend se
-rechargent lors des modifications. Le simulateur publie des mesures fictives
-toutes les deux secondes et recoit les commandes LED ON/OFF sans action physique.
-La connexion MQTT est reelle, mais les capteurs et la carte sont simules.
+Vite et un simulateur en arriere-plan. Le backend et le frontend se rechargent
+lors des modifications. Le simulateur (`iot-backend/src/tools/`) joue une scene
+coherente :
+
+- mesures toutes les deux secondes (temperature et humidite qui derivent, pic
+  de gaz toutes les 4 minutes, passage d'une personne 20 s par minute) ;
+- au demarrage, publication horodatee des 5 dernieres minutes manquantes, pour
+  que les graphiques soient remplis tout de suite (meme mecanisme que le rejeu
+  du firmware) ;
+- flux camera simule sur http://127.0.0.1:8090/stream.mjpg (silhouette dans un
+  cadre vert si le visage est reconnu, rouge sinon) et detections publiees sur
+  `sentinel/vision` ;
+- reception des commandes LED ON/OFF, sans action physique.
+
+La connexion MQTT est reelle, mais les capteurs, la carte et la camera sont
+simules.
 
 - Dashboard : http://127.0.0.1:5173 (connexion requise, voir ci-dessous)
 - API : http://127.0.0.1:3001/api/status
@@ -59,7 +96,7 @@ La connexion MQTT est reelle, mais les capteurs et la carte sont simules.
 - Journaux : `.runtime/mosquitto.log`, `.runtime/backend.log`, `.runtime/frontend.log`.
 - Mesures et commandes simulees : `.runtime/simulator.log`.
 
-Les ports `1883`, `3001` et `5173` sont fixes pour ces scripts. Un service deja
+Les ports `1883`, `3001`, `5173` et `8090` sont fixes pour ces scripts. Un service deja
 present sur l'un de ces ports est reutilise : verifier qu'il s'agit bien du
 service attendu. Les scripts peuvent aussi etre appeles depuis un autre dossier.
 
@@ -117,16 +154,42 @@ mosquitto_pub -h 127.0.0.1 -t esp8266/donnees \
 	-m '{"temperature":22.5,"humidity":48,"gas":120,"presence":true}'
 ```
 
-Le dashboard doit afficher ces valeurs sous environ deux secondes.
+Le dashboard doit afficher ces valeurs en temps reel (graphiques et tableaux
+mis a jour par Server-Sent Events).
 
 ```sh
 curl -b /tmp/sentinel-cookies http://127.0.0.1:5173/api/status
+curl -b /tmp/sentinel-cookies 'http://127.0.0.1:5173/api/readings?limit=20'
 ```
 
-La reponse doit contenir `mqttConnected: true`, un `lastMessageAt` renseigne et
-les valeurs dans `telemetry`. Les donnees sont conservees en memoire et perdues
-au redemarrage du backend. Les champs sont optionnels ; les mesures doivent etre
-des nombres finis et `presence` un booleen.
+La reponse de `/api/status` doit contenir `mqttConnected: true`, un
+`lastMessageAt` renseigne et les valeurs dans `telemetry`. Chaque mesure est
+enregistree dans `iot-backend/data/telemetry.db` (SQLite) et conservee 7 jours
+(`READINGS_RETENTION_DAYS`). Les champs sont optionnels ; les mesures doivent
+etre des nombres finis et `presence` un booleen. Un champ `ts` (epoch en
+secondes) date la mesure : le firmware l'envoie pour les mesures rejouees apres
+une coupure.
+
+## Camera Et Reconnaissance Faciale
+
+La page Camera affiche le flux du script vision de l'equipe IA, relaye par le
+backend derriere l'authentification, et l'historique des detections. Contrat a
+respecter par ce script :
+
+- Flux video MJPEG (`multipart/x-mixed-replace`) annote, sur l'URL definie par
+  `VISION_STREAM_URL` (ex. `http://192.168.10.1:8000/stream.mjpg`).
+- Detections publiees en JSON sur le topic `sentinel/vision`
+  (`MQTT_VISION_TOPIC`) :
+
+  ```json
+  {"ts":1791280000,"persons":1,"faces":[{"name":"Alice","confidence":0.92}]}
+  ```
+
+  `name` vaut `null` pour un visage inconnu (signale en alerte sur la page),
+  `confidence` est compris entre 0 et 1, `ts` et `persons` sont optionnels.
+
+En mode test local, le simulateur publie des detections fictives ; sans
+`VISION_STREAM_URL`, la page indique que le flux est indisponible.
 
 ## Tester Les Commandes LED
 
@@ -156,13 +219,64 @@ Cela confirme la publication, pas l'execution physique par une carte.
 npm --prefix iot-backend test
 npm --prefix iot-backend run typecheck
 npm --prefix iot-backend run build
+npm --prefix iot-frontend test
 npm --prefix iot-frontend run lint
 npm --prefix iot-frontend run build
+(cd firmware && pio test -e native)
 ```
 
-Les tests existants couvrent le parsing de la telemetrie ; ils ne necessitent
-pas de broker. Les commandes ci-dessus de publication et d'abonnement servent
-aux tests manuels d'integration MQTT / API / dashboard.
+Les tests couvrent les regles du domaine, les cas d'usage (avec de faux
+adaptateurs), le parsing des messages MQTT, le depot SQLite et le coeur du
+firmware ; ils ne necessitent ni broker ni carte. Les commandes de publication
+et d'abonnement ci-dessus servent aux tests manuels d'integration.
+
+## Notifications Par E-mail
+
+L'onglet **Parametres** du dashboard regle l'adresse qui recoit les alertes,
+les active et choisit les types envoyes ; un bouton envoie un e-mail de test.
+Les notifications sont uniquement envoyees par e-mail.
+
+| Alerte | Declenchement |
+| --- | --- |
+| Intrusion | le capteur PIR passe a "presence" |
+| Visage inconnu | la reconnaissance faciale signale un visage sans nom |
+| Boitier hors ligne | aucune mesure recue depuis 30 s |
+
+- Un meme type d'alerte part au plus une fois toutes les 5 minutes ; les
+  mesures rejouees apres une coupure ne declenchent pas d'alerte.
+- L'envoi passe par SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+  `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`), STARTTLS exige hors TLS
+  implicite. Sans serveur SMTP, la page le signale et aucun e-mail ne part.
+- En mode test local (`run.sh`), les e-mails ne sont pas envoyes mais ecrits
+  dans `.runtime/mail/` (fichiers `.eml`, lisibles avec un client mail).
+- Les parametres sont stockes dans `iot-backend/data/settings.db`.
+
+## Docker
+
+Le backend et le frontend sont conteneurises (`iot-backend/Dockerfile`,
+`iot-frontend/Dockerfile`) et orchestres par `docker-compose.yml`. Le frontend
+est servi par nginx, qui relaie `/api` vers le backend : seul le port web est
+publie, l'API n'est pas joignable directement.
+
+```sh
+cp .env.example .env        # puis renseigner BETTER_AUTH_SECRET (openssl rand -base64 32)
+docker compose up -d --build
+docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.test "Operateur"
+```
+
+- Dashboard : http://localhost:8080 (port `WEB_PORT`). Pour un acces depuis le
+  reseau de table, ajouter l'URL (ex. `http://192.168.10.1:8080`) a
+  `FRONTEND_ORIGINS` et la definir comme `PUBLIC_URL`.
+- Le broker MQTT n'est pas inclus : `MQTT_URL` pointe par defaut sur le
+  Mosquitto de l'hote (`host.docker.internal:1883`).
+- Les comptes et l'historique des capteurs sont conserves dans le volume
+  `backend-data`.
+- `VISION_STREAM_URL` et `MQTT_VISION_TOPIC` raccordent le script vision de
+  l'equipe IA (voir [Camera](#camera-et-reconnaissance-faciale)).
+- Durcissement : processus non-root, systeme de fichiers en lecture seule,
+  capacites Linux retirees, `no-new-privileges`, en-tetes de securite nginx
+  (CSP, `X-Frame-Options`, `nosniff`). Le backend ne fait confiance a
+  `X-Forwarded-For` que depuis le sous-reseau interne `172.30.10.0/24` (nginx).
 
 ## Avec Un Vrai ESP8266
 

@@ -117,11 +117,13 @@ BETTER_AUTH_SECRET="$(cat "$RUNTIME/auth-secret")"
 
 start_service backend 3001 "$BACKEND" env PORT=3001 MQTT_URL=mqtt://127.0.0.1:1883 \
   BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" BETTER_AUTH_URL=http://127.0.0.1:5173 \
+  VISION_STREAM_URL=http://127.0.0.1:8090/stream.mjpg \
+  MAIL_OUTBOX_DIR="$RUNTIME/mail" \
   MQTT_TELEMETRY_TOPIC=esp8266/donnees MQTT_COMMAND_TOPIC=esp8266/led \
-  "$BACKEND/node_modules/.bin/tsx" watch src/index.ts
+  "$BACKEND/node_modules/.bin/tsx" watch src/main.ts
 start_service frontend 5173 "$FRONTEND" "$FRONTEND/node_modules/.bin/vite" \
   --host 127.0.0.1 --port 5173 --strictPort
 
-start_service simulator 0 "$BACKEND" "$BACKEND/node_modules/.bin/tsx" src/simulator.ts
+start_service simulator 0 "$BACKEND" "$BACKEND/node_modules/.bin/tsx" src/tools/simulator.ts
 
-printf '\nMode TEST LOCAL : capteurs et LED simules, aucune carte IoT requise.\nDashboard : http://127.0.0.1:5173\nAPI : http://127.0.0.1:3001/api/status\nJournaux : %s\nCommandes LED simulees : %s/simulator.log\nCompte du dashboard : npm --prefix iot-backend run user:create -- <email> "<nom>"\nArret : bash stop.sh\n' "$RUNTIME" "$RUNTIME"
+printf '\nMode TEST LOCAL : capteurs, LED, camera et detections simules, aucune carte IoT requise.\nDashboard : http://127.0.0.1:5173\nAPI : http://127.0.0.1:3001/api/status\nJournaux : %s\nCommandes LED simulees : %s/simulator.log\nE-mails de notification (non envoyes) : %s/mail\nCompte du dashboard : npm --prefix iot-backend run user:create -- <email> "<nom>"\nArret : bash stop.sh\n' "$RUNTIME" "$RUNTIME" "$RUNTIME"

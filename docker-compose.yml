@@ -1,0 +1,71 @@
+# Stack web SENTINEL-X : backend (API + Better Auth) et frontend (nginx).
+# Le broker MQTT n'est pas inclus : renseigner MQTT_URL dans .env.
+name: sentinel-x
+
+services:
+  backend:
+    build: ./iot-backend
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      MQTT_URL: ${MQTT_URL:-mqtt://host.docker.internal:1883}
+      MQTT_TELEMETRY_TOPIC: esp8266/donnees
+      MQTT_COMMAND_TOPIC: esp8266/led
+      MQTT_VISION_TOPIC: ${MQTT_VISION_TOPIC:-sentinel/vision}
+      # Flux MJPEG du script vision de l'equipe IA (relaye derriere l'authentification).
+      VISION_STREAM_URL: ${VISION_STREAM_URL:-}
+      READINGS_RETENTION_DAYS: ${READINGS_RETENTION_DAYS:-7}
+      # Notifications par e-mail (SMTP). Sans SMTP_HOST, aucun e-mail n'est envoye.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-SENTINEL-X <sentinel-x@localhost>}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Definir BETTER_AUTH_SECRET dans .env}
+      BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      # Seul nginx, sur le reseau interne, peut transmettre l'IP du client.
+      TRUST_PROXY: 172.30.10.0/24
+    volumes:
+      # Comptes (auth.db), historique des capteurs (telemetry.db) et parametres (settings.db).
+      - backend-data:/app/data
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - web
+    # Pas de port publie : l'API n'est joignable qu'a travers nginx.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build: ./iot-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - ${WEB_PORT:-8080}:8080
+    networks:
+      - web
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  web:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+
+volumes:
+  backend-data:
