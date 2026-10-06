@@ -1,0 +1,84 @@
+.login {
+  width: min(100% - 32px, 360px);
+  margin: auto;
+  padding: 96px 0 56px;
+  text-align: center;
+}
+
+.login h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.login-subtitle {
+  margin: 6px 0 32px;
+  color: #555;
+  font-size: 14px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #555;
+  font-size: 14px;
+}
+
+.login-form input {
+  min-height: 42px;
+  border: 1px solid #111;
+  border-radius: 0;
+  padding: 8px 12px;
+  color: #111;
+  font: inherit;
+}
+
+.login-form input:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+
+.login-form button {
+  min-height: 42px;
+  margin-top: 8px;
+  border: 1px solid #111;
+  padding: 8px 16px;
+  color: #fff;
+  background: #111;
+  font: inherit;
+  cursor: pointer;
+}
+
+.login-form button:hover:not(:disabled) {
+  color: #111;
+  background: #fff;
+}
+
+.login-form button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+
+.login-form button:disabled {
+  color: #777;
+  border-color: #ccc;
+  background: #eee;
+  cursor: not-allowed;
+}
+
+.login-form .message {
+  min-height: 1.5em;
+  margin: 0;
+  color: #444;
+  font-size: 14px;
+  text-align: center;
+}

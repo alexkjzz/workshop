@@ -10,8 +10,8 @@ for executable in node npm lsof; do
   fi
 done
 
-if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1)'; then
-  printf 'Node.js 22.12 ou plus recent est requis.\n' >&2
+if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 13) ? 0 : 1)'; then
+  printf 'Node.js 22.13 ou plus recent est requis.\n' >&2
   exit 1
 fi
 

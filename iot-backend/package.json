@@ -8,13 +8,15 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/telemetry.test.ts"
+    "test": "tsx --test src/telemetry.test.ts",
+    "user:create": "tsx src/create-user.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
+    "better-auth": "^1.7.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "mqtt": "^5.16.0"

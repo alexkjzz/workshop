@@ -8,6 +8,8 @@ interface DeviceDashboardProps {
   commandMessage: string;
   sendingCommand: boolean;
   sendCommand: (order: DeviceCommand) => Promise<void>;
+  userName: string;
+  onSignOut: () => void;
 }
 
 function formatReading(value: number | boolean | undefined, unit = '') {
@@ -23,6 +25,8 @@ export function DeviceDashboard({
   commandMessage,
   sendingCommand,
   sendCommand,
+  userName,
+  onSignOut,
 }: DeviceDashboardProps) {
   const telemetry = status?.telemetry;
   const lastMessage = status?.lastMessageAt
@@ -34,6 +38,12 @@ export function DeviceDashboard({
   return (
     <main className="dashboard">
       <header className="page-header">
+        <div className="session-bar">
+          <span>Connecté : {userName}</span>
+          <button type="button" onClick={onSignOut}>
+            Se déconnecter
+          </button>
+        </div>
         <p className="connection-status" role="status">
           {loading
             ? 'Connexion au serveur...'

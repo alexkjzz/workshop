@@ -9,6 +9,31 @@
   text-align: center;
 }
 
+.session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  color: #555;
+  font-size: 13px;
+}
+
+.session-bar button {
+  border: none;
+  padding: 0;
+  color: #111;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.session-bar button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+
 .connection-status {
   margin-top: 12px;
 }

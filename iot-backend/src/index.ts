@@ -1,13 +1,16 @@
 import { createApp } from './app.js';
+import { createAuth } from './auth.js';
 import { config } from './config.js';
 import { MqttService } from './mqtt-service.js';
+
+const auth = await createAuth();
 
 const mqttService = new MqttService(
   config.mqttUrl,
   config.telemetryTopic,
   config.commandTopic,
 );
-const app = createApp(mqttService, config.frontendOrigins);
+const app = createApp(mqttService, auth, config.frontendOrigins);
 const server = app.listen(config.port, () => {
   console.info(`HTTP server listening on http://localhost:${config.port}.`);
 });

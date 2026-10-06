@@ -1,22 +1,52 @@
+import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
-import express, { type NextFunction, type Request, type Response } from 'express';
+import express, {
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+} from 'express';
+import type { Auth } from './auth.js';
 import type { MqttService } from './mqtt-service.js';
 
-export function createApp(mqttService: MqttService, frontendOrigins: string[]) {
+export function createApp(mqttService: MqttService, auth: Auth, frontendOrigins: string[]) {
   const app = express();
 
-  app.use(cors({ origin: frontendOrigins }));
+  // Only the local Vite proxy may report the client address. Better Auth reads
+  // X-Forwarded-For for rate limiting, so it is rewritten with the real client
+  // IP to prevent spoofing.
+  app.set('trust proxy', 'loopback');
+  app.use((request, _response, next) => {
+    request.headers['x-forwarded-for'] = request.ip;
+    next();
+  });
+
+  app.use(cors({ origin: frontendOrigins, credentials: true }));
+
+  // Better Auth must receive the raw body, before express.json().
+  app.all('/api/auth/*splat', toNodeHandler(auth));
+
   app.use(express.json({ limit: '16kb' }));
+
+  const requireSession: RequestHandler = async (request, response, next) => {
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+    if (!session) {
+      response.status(401).json({ message: 'Authentication required.' });
+      return;
+    }
+    response.locals.session = session;
+    next();
+  };
 
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok' });
   });
 
-  app.get('/api/status', (_request, response) => {
+  app.get('/api/status', requireSession, (_request, response) => {
     response.json(mqttService.getStatus());
   });
 
-  app.post('/api/action', async (request, response) => {
+  app.post('/api/action', requireSession, async (request, response) => {
     const body: unknown = request.body;
     const order =
       typeof body === 'object' && body !== null && 'ordre' in body
@@ -35,6 +65,7 @@ export function createApp(mqttService: MqttService, frontendOrigins: string[]) {
 
     try {
       await mqttService.publishCommand(order);
+      console.info(`Command ${order} sent by ${response.locals.session.user.email}.`);
       response.status(202).json({ message: `Command ${order} published.` });
     } catch {
       response.status(502).json({ message: 'Could not publish command to MQTT.' });

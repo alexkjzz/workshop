@@ -109,7 +109,14 @@ else
   printf 'mosquitto : service deja actif sur le port 1883, laisse intact.\n'
 fi
 
+# Secret de session Better Auth, genere une fois et conserve hors de Git.
+if [[ ! -s "$RUNTIME/auth-secret" ]]; then
+  (umask 077 && node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))' > "$RUNTIME/auth-secret")
+fi
+BETTER_AUTH_SECRET="$(cat "$RUNTIME/auth-secret")"
+
 start_service backend 3001 "$BACKEND" env PORT=3001 MQTT_URL=mqtt://127.0.0.1:1883 \
+  BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" BETTER_AUTH_URL=http://127.0.0.1:5173 \
   MQTT_TELEMETRY_TOPIC=esp8266/donnees MQTT_COMMAND_TOPIC=esp8266/led \
   "$BACKEND/node_modules/.bin/tsx" watch src/index.ts
 start_service frontend 5173 "$FRONTEND" "$FRONTEND/node_modules/.bin/vite" \
@@ -117,4 +124,4 @@ start_service frontend 5173 "$FRONTEND" "$FRONTEND/node_modules/.bin/vite" \
 
 start_service simulator 0 "$BACKEND" "$BACKEND/node_modules/.bin/tsx" src/simulator.ts
 
-printf '\nMode TEST LOCAL : capteurs et LED simules, aucune carte IoT requise.\nDashboard : http://127.0.0.1:5173\nAPI : http://127.0.0.1:3001/api/status\nJournaux : %s\nCommandes LED simulees : %s/simulator.log\nArret : bash stop.sh\n' "$RUNTIME" "$RUNTIME"
+printf '\nMode TEST LOCAL : capteurs et LED simules, aucune carte IoT requise.\nDashboard : http://127.0.0.1:5173\nAPI : http://127.0.0.1:3001/api/status\nJournaux : %s\nCommandes LED simulees : %s/simulator.log\nCompte du dashboard : npm --prefix iot-backend run user:create -- <email> "<nom>"\nArret : bash stop.sh\n' "$RUNTIME" "$RUNTIME"
