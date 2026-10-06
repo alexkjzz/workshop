@@ -36,6 +36,7 @@ gestionnaire de paquets du systeme avant de lancer `bash install.sh`.
 
 - `iot-backend/` : API Express et connexion MQTT.
 - `iot-frontend/` : application React/Vite.
+- `firmware/` : firmware ESP8266 (PlatformIO, MQTTS), voir [firmware/README.md](firmware/README.md).
 - `install.sh`, `run.sh`, `stop.sh` : installation, demarrage et arret.
 
 ## Demarrage Et Arret
