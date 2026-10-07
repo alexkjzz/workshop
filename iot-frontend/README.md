@@ -13,6 +13,12 @@ sont affiches explicitement. Les derniers resultats restent consultables pendant
 une interruption du service IA, avec leur horodatage et leur origine
 (`live` ou `SIMULATION`).
 
+Le panneau **Etat du boitier ESP** affiche le prechauffage MQ-2, la calibration
+PIR, la validite DHT22, l'alarme locale et les LEDs transmis par le firmware USB.
+Les etats absents ou sans mesure recente restent inconnus ; les valeurs
+invalides ne deviennent pas des zeros dans les graphiques. La passerelle USB
+transmet uniquement les mesures : les commandes LED exigent un firmware MQTT.
+
 ## Architecture (clean architecture)
 
 ```
@@ -50,6 +56,8 @@ référence restent dans le service Python ; voir
 [Face Recognition](../docs/FACE_RECOGNITION.md).
 
 ## Commandes
+
+Depuis `iot-frontend/`, apres `npm ci` (ou le script d'installation racine) :
 
 ```sh
 npm run dev      # Vite, /api relaye vers http://127.0.0.1:3001

@@ -7,5 +7,5 @@ models/*.joblib
 models/*.pt
 models/*.onnx
 data/*.csv
-!data/sensor_data.csv
+!data/*.example.csv
 *.log

@@ -13,6 +13,8 @@ void OledDisplay::begin() {
     Serial.println(F("OLED : NON DETECTE"));
     return;
   }
+  // Tourner l'écran de 180 degrés
+  display_.setRotation(2);
 
   Serial.println(F("OLED : OK"));
   display_.clearDisplay();

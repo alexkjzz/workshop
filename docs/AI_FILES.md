@@ -18,7 +18,7 @@ ai/requirements-core.txt
 ai/requirements-vision.txt
 ai/requirements-test.txt
 ai/requirements-lock.txt
-ai/data/sensor_data.csv
+ai/data/sensor_data.example.csv
 ai/models/.gitkeep
 ai/app/__init__.py
 ai/app/main.py
@@ -53,8 +53,10 @@ ai/tests/test_vision.py
 ai/tests/test_export.py
 ```
 
-`sensor_data.csv` ne contient que l’en-tête, sans aucune mesure fictive.
-Les CSV et modèles de démonstration sont générés uniquement par une commande explicite.
+`sensor_data.example.csv` ne contient que l’en-tête du format attendu.
+`sensor_data.csv` est généré par l'export local et ignoré par Git, comme les
+mesures privées et les modèles entraînés. Les CSV et modèles de démonstration
+sont générés uniquement par une commande explicite.
 
 ### Backend `iot-backend/`
 

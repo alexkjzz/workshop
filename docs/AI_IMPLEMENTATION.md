@@ -1,9 +1,10 @@
-# Integration IA Sentinel-X : livraison
+# Integration IA Sentinel-X
 
 Le dossier `ai/` et son integration backend/frontend sont implementes.
 Les mecanismes deja presents restent les points d'entree : MQTT pour l'ESP8266,
 SQLite pour les mesures, Better Auth pour le dashboard, SSE pour le temps reel,
-et le proxy MJPEG pour la video. Le firmware n'a pas ete modifie.
+et le proxy MJPEG pour la video. Le firmware courant utilise une passerelle
+USB ; la variante reseau archivee reste independante.
 
 L'inventaire exhaustif des fichiers crees et modifies est dans
 [AI_FILES.md](AI_FILES.md). Les commandes PowerShell, schemas et depannage
@@ -13,7 +14,8 @@ sont dans [ai/README.md](../ai/README.md).
 
 ```mermaid
 flowchart LR
-    ESP[ESP8266] -->|MQTTS| MQTT[Mosquitto]
+    ESP[ESP8266] -->|USB serie| Bridge[Passerelle Python]
+    Bridge -->|MQTT local| MQTT[Mosquitto]
     MQTT -->|telemetrie| API[Express]
     API -->|mesure et origine| DB[(SQLite)]
     API -->|HTTP local / file ordonnee| Python[FastAPI]
@@ -31,7 +33,8 @@ flowchart LR
 
 ### Chemin des mesures
 
-1. Le firmware publie sur `esp8266/donnees` via son broker MQTTS.
+1. Le firmware imprime ses mesures USB ; la passerelle Python valide les blocs
+   et publie sur `esp8266/donnees` via le broker MQTT local.
 2. Le gateway MQTT existant valide le JSON. Les champs optionnels, `presence`
    booleen et `ts` epoch restent compatibles ; `presence=0/1` et `timestamp`
    ISO sont aussi acceptes.
@@ -100,50 +103,31 @@ Les poids de risque et les confiances sont des indices demonstratifs explicites,
 pas des probabilites calibrees. Un modele entraine sur une simulation ne suffit
 pas a valider la performance sur du materiel reel.
 
-## Verifications effectuees sous Windows
+## Validation
 
-| Verification | Resultat |
-| --- | --- |
-| Backend : tests | 39 tests reussis apres correction camera |
-| Backend : typecheck et build | reussis |
-| Frontend : tests | 15 tests reussis apres correction camera et affichage des detections |
-| Frontend : lint et build | reussis |
-| Python : suite complete apres correction camera | 42 tests reussis |
-| Python : vision apres corrections de cycle de vie | 10 tests reussis, dont 8 deja dans la suite initiale |
-| Python : fusion finale | 13 tests reussis, deja dans la suite initiale |
-| Python : nouveaux controles d'export | 2 controles reussis directement dans le workspace |
-| Integration reelle HTTP Python / Node / SQLite / SSE | reussie |
-| `pip check` | aucune dependance incompatible |
-| Script PowerShell : configuration sans reinstallation | reussi |
+Les commandes des suites backend, frontend et Python sont dans
+[ai/README.md](../ai/README.md#tests). Elles verifient les contrats, la fusion,
+la fraicheur des mesures, les routes authentifiees, SQLite et SSE.
 
-L'integration demarre un serveur Python temporaire protege par un token et un
-backend de test avec bases isolees. Elle verifie les mesures partielles au format
-firmware, les routes et SSE authentifies, la persistance, le controle vision sans
-materiel, la deduplication, une panne Python puis sa reprise. Elle ne substitue
-pas un test du transport physique MQTT ou d'une webcam.
+`node scripts/check-ai-integration.mjs` lance un serveur Python temporaire et
+un backend de test avec bases isolees. Il verifie aussi une panne Python puis
+sa reprise. Le parseur USB se teste sans carte avec
+`python -m unittest discover -s scripts/tests -v`.
 
-Dependances vision effectivement installees et essayees : OpenCV 4.14.0,
-Ultralytics 8.4.174, PyTorch 2.14.1 CPU, lap 0.5.13. Les poids officiels YOLOv8n
-ont ete telecharges explicitement dans `ai/models/yolov8n.pt` (fichier ignore).
-Sur des images noires 640x480, ByteTrack est reste actif et a retourne zero
-personne ; inference initiale environ 2,16 secondes, suivantes environ 28-58 ms.
-Ces mesures locales ne sont pas une garantie de FPS avec une webcam reelle.
-
-La suite Python complete a ete relancee lors de la correction camera.
-L'avertissement Starlette concernant son ancien client httpx de test ne
-concerne pas le service en production. Les tests physiques du flux React,
-du proxy Express, de FastAPI, des arrets et reprises sont documentes dans
-[CAMERA_FIX.md](CAMERA_FIX.md).
+Ces controles ne valident pas le transport USB physique, la precision d'un
+modele entraine sur vos mesures ni les performances de votre webcam. Les
+procedures camera sont dans [CAMERA_FIX.md](CAMERA_FIX.md) et les tests faciaux
+dans [FACE_RECOGNITION.md](FACE_RECOGNITION.md).
 
 ## A verifier sur le materiel
 
 - Collecter et selectionner un historique **normal reel**, entrainer le modele,
   puis evaluer les faux positifs et la derive des capteurs.
-- Demarrer le broker MQTTS existant et verifier les certificats/reseau de
-  l'ESP8266 ; aucun broker n'a ete installe ni reconfigure sur le PC.
+- Verifier les mesures USB, le port serie, les prechauffages et la reconnexion
+  selon [le guide ESP USB](esp-serial.md). Pour l'ancienne variante reseau,
+  verifier separement le broker MQTTS, les certificats et les identifiants.
 - Evaluer les performances et les faux positifs de YOLO sur des sequences
-  representatives. Le flux physique 640x480 et les boutons React ont ete
-  verifies dans Edge lors de la correction camera.
+  representatives et verifier le flux, les boutons React et la reprise camera.
 
 ## Demonstration conseillee
 

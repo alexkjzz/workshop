@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend / Node 24
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: iot-backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: iot-backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+
+  frontend:
+    name: Frontend / Node 24
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: iot-frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: iot-frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+
+  ai:
+    name: AI and USB parser / Python 3.12
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Tests own their temporary models/devices and never use local settings.
+      AI_HOST: '127.0.0.1'
+      AI_PORT: '8001'
+      AI_SERVICE_TOKEN: ''
+      VISION_AUTO_START: 'false'
+      FACE_RECOGNITION_ENABLED: 'false'
+      ANOMALY_MODEL: ${{ runner.temp }}/sentinel-x-ci/missing.joblib
+      YOLO_MODEL: ${{ runner.temp }}/sentinel-x-ci/missing.pt
+      FACE_KNOWN_DIR: ${{ runner.temp }}/sentinel-x-ci/known_faces
+      FACE_DETECTOR_MODEL: ${{ runner.temp }}/sentinel-x-ci/missing-yunet.onnx
+      FACE_EMBEDDING_MODEL: ${{ runner.temp }}/sentinel-x-ci/missing-sface.onnx
+      YOLO_AUTOINSTALL: 'False'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            ai/requirements-core.txt
+            ai/requirements-test.txt
+            scripts/requirements-esp.txt
+            .github/workflows/ci.yml
+      - name: Check tracked files before installing dependencies
+        run: python scripts/check-repository.py
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Real JPEG encoding is tested; inference and cameras use test doubles.
+          # Headless OpenCV avoids GUI packages, YOLO weights and PyTorch downloads.
+          python -m pip install -r ai/requirements-test.txt -r scripts/requirements-esp.txt 'opencv-python-headless>=4.10,<5'
+          python -m pip check
+      - name: Test AI service
+        working-directory: ai
+        run: python -m pytest -q
+      - name: Test USB serial parser and bounded MQTT forwarding
+        run: python -m unittest discover -s scripts/tests -v
+
+  firmware:
+    name: ESP8266 firmware / compile only
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO
+        run: python -m pip install 'platformio>=6.1,<7'
+      - name: Compile the current USB firmware
+        working-directory: firmware
+        run: python -m platformio run --environment nodemcuv2

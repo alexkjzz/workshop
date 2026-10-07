@@ -1,4 +1,20 @@
-# Workshop IoT
+# Sentinel-X
+
+Plateforme locale de monitoring IoT avec dashboard **React/Vite**, backend
+**Express/TypeScript** et service IA **FastAPI/Python**. Le firmware ESP8266
+actuel transmet les mesures DHT22, MQ-2 et PIR par **USB** ; une passerelle
+Python les publie sur MQTT pour Express, SQLite et le dashboard en temps reel.
+
+Fonctionnalites : historique des capteurs, etats du boitier et des LEDs,
+authentification, notifications, detection de personnes **YOLOv8 + ByteTrack**,
+reconnaissance faciale locale **YuNet + SFace**, **Sensor Fusion** et **Risk
+Engine**. **Isolation Forest doit etre entraine sur vos mesures normales** :
+aucun modele de production entraine n'est fourni.
+
+Prerequis : Node.js >= 22.13, Python 3.12 x64 pour l'IA et la passerelle,
+Mosquitto pour MQTT, et PlatformIO pour compiler le firmware. Les procedures
+d'installation sont ci-dessous ; [le guide GitHub](docs/GITHUB.md) explique
+comment partager le projet sans les donnees et secrets locaux.
 
 ## Sentinel-X : intelligence artificielle et Windows
 
@@ -53,10 +69,11 @@ module séparé **OpenCV YuNet + SFace** pour détecter et identifier les visage
 Le navigateur utilise les routes Express authentifiées ; Express appelle FastAPI.
 Aucune nouvelle dépendance Python lourde : les modèles ONNX utilisent OpenCV déjà installé.
 
-Installation des modèles officiels (une fois, environ 39 Mo, SHA-256 vérifié) :
+Installation des modèles officiels (une fois, environ 39 Mo, SHA-256 vérifié),
+dans un terminal PowerShell ouvert à la racine du dépôt :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.vision.setup_faces
 ```
 
@@ -138,9 +155,8 @@ gestionnaire de paquets du systeme avant de lancer `bash install.sh`.
 
 ## Architecture
 
-Les trois projets suivent la clean architecture : les regles metier ne
-dependent d'aucun framework, et les dependances pointent toujours vers le
-centre.
+Les projets web suivent une architecture en couches ; le firmware USB separe
+les capteurs, les sorties et l'affichage dans `lib/sentinel_core/src/`.
 
 | Couche | Role | Backend | Frontend | Firmware |
 | --- | --- | --- | --- | --- |
@@ -155,9 +171,10 @@ sans navigateur ni carte, avec de faux adaptateurs en memoire cote serveur.
 Le parseur serie se teste egalement sans ESP.
 
 ```
-ESP8266 --USB--> passerelle serie --MQTT--> Mosquitto --> backend --SQLite--> historique
-                                          |  \--REST + SSE--> dashboard (Metriques)
-script vision IA --MJPEG + MQTT--------->/   \--relais camera--> dashboard (Camera)
+ESP8266 --USB--> passerelle serie --MQTT--> Mosquitto --> Express --> SQLite
+                                                        |  \--REST/SSE--> React
+                                                        |--HTTP--> FastAPI
+Webcam serveur --> OpenCV / YOLO / ByteTrack / YuNet / SFace --> MJPEG via Express
 ```
 
 ## Demarrage Et Arret
@@ -268,9 +285,12 @@ une coupure.
 
 ## Camera Et Reconnaissance Faciale
 
-La page Camera affiche le flux du script vision de l'equipe IA, relaye par le
-backend derriere l'authentification, et l'historique des detections. Contrat a
-respecter par ce script :
+La page Camera demarre la webcam du PC serveur via Express et FastAPI. YOLO et
+ByteTrack detectent et suivent les personnes ; YuNet/SFace identifie les visages
+a partir du catalogue local. Le MJPEG et les metadonnees transitent par Express.
+Voir [Face Recognition](docs/FACE_RECOGNITION.md) pour l'installation et les photos.
+
+Un ancien service vision externe reste compatible avec ce contrat :
 
 - Flux video MJPEG (`multipart/x-mixed-replace`) annote, sur l'URL definie par
   `VISION_STREAM_URL` (ex. `http://192.168.10.1:8000/stream.mjpg`).
@@ -284,8 +304,9 @@ respecter par ce script :
   `name` vaut `null` pour un visage inconnu (signale en alerte sur la page),
   `confidence` est compris entre 0 et 1, `ts` et `persons` sont optionnels.
 
-En mode test local, le simulateur publie des detections fictives ; sans
-`VISION_STREAM_URL`, la page indique que le flux est indisponible.
+En mode test local, le simulateur publie des detections fictives. Hors simulation,
+si `VISION_STREAM_URL` est omis, Express utilise le flux du service IA configure
+par `AI_SERVICE_URL` ; une valeur `VISION_STREAM_URL` vide desactive le flux.
 
 ## Tester Les Commandes LED
 
@@ -311,6 +332,11 @@ Cela confirme la publication, pas l'execution physique par une carte.
 
 ## Verifications Automatiques
 
+Le workflow [GitHub Actions](.github/workflows/ci.yml) verifie le backend,
+le frontend, l'IA et la compilation du firmware a chaque push et pull request.
+Les tests utilisent des adaptateurs de test et ne demandent ni secrets, ni
+webcam, ni ESP physique. Les modeles telecharges restent hors du depot.
+
 ```sh
 npm --prefix iot-backend test
 npm --prefix iot-backend run typecheck
@@ -318,12 +344,16 @@ npm --prefix iot-backend run build
 npm --prefix iot-frontend test
 npm --prefix iot-frontend run lint
 npm --prefix iot-frontend run build
-(cd firmware && pio test -e native)
+(cd firmware && pio run)
+python -m unittest discover -s scripts/tests -v
+(cd ai && python -m pytest -q)
+python scripts/check-repository.py
 ```
 
 Les tests couvrent les regles du domaine, les cas d'usage (avec de faux
-adaptateurs), le parsing des messages MQTT, le depot SQLite et le coeur du
-firmware ; ils ne necessitent ni broker ni carte. Les commandes de publication
+adaptateurs), le parsing des messages MQTT, le depot SQLite et la passerelle USB ;
+ils ne necessitent ni broker ni carte. `pio run` compile le firmware USB actuel
+(sans cible de tests `native`). Les commandes de publication
 et d'abonnement ci-dessus servent aux tests manuels d'integration.
 
 ## Notifications Par E-mail
@@ -376,15 +406,15 @@ docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.te
 
 ## Avec Un Vrai ESP8266
 
-Le broker lance par le script est reserve aux connexions locales. Pour une carte,
-arreter le mode test avec `bash stop.sh` pour ne plus publier de mesures fictives,
-puis lancer le backend et le frontend manuellement avec `npm run dev` dans leurs
-dossiers respectifs. Ensuite,
-configurer un listener Mosquitto accessible sur le reseau local, autoriser le
-port `1883` dans le pare-feu et utiliser l'adresse IP du Mac dans le firmware
-(pas `127.0.0.1`). La carte et le Mac doivent etre sur le meme reseau.
-Prevoir une authentification et des ACL avant d'exposer le broker ; ne pas
-ouvrir un broker anonyme sur Internet.
+Le firmware courant utilise USB : suivre [le guide de la passerelle](docs/esp-serial.md).
+Le broker reste local ; aucun acces Wi-Fi de la carte au broker n'est necessaire.
+Arreter le simulateur avant de recevoir les mesures reelles pour ne pas melanger
+leurs origines. Les LEDs et le buzzer sont commandes localement par le firmware ;
+les boutons LED du dashboard necessitent un firmware MQTT compatible.
+
+`firmware-old/` conserve l'ancienne variante reseau. Son utilisation demande
+une configuration Wi-Fi, un broker accessible, ses certificats et identifiants ;
+elle n'est pas utilisee par la passerelle USB actuelle.
 
 La configuration du backend par variables d'environnement est detaillee dans
 [iot-backend/README.md](iot-backend/README.md). Pour personnaliser les ports ou

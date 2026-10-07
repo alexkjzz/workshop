@@ -25,8 +25,10 @@ are tested with in-memory fakes, without a broker or a database.
 
 ## Run
 
+From `iot-backend/` (Node.js >= 22.13), after configuring the local environment:
+
 ```sh
-npm install
+npm ci
 export BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 npm run user:create -- operateur@aethercorp.test "Operateur"
 npm run dev
@@ -104,6 +106,14 @@ dates the measurement: readings replayed by the box after an outage are stored
 at their measurement time and do not overwrite the latest state. Timestamps in
 the future or older than the retention period are replaced by the reception
 time.
+
+The current ESP8266 firmware sends its measurements over USB. The Python
+[serial bridge](../docs/esp-serial.md) publishes them on the same MQTT topic.
+Optional boolean fields `climateValid`, `gasReady`, `pirReady`, `gasAlert`,
+`alarmActive`, `ledRed`, `ledOrange` and `ledGreen` are preserved in status,
+history and SSE. Sensor fields may be absent during warmup; absent flags mean
+unknown. USB ingestion is read-only: physical LED commands require a compatible
+MQTT firmware.
 
 Public sign-up is disabled: create accounts with
 `npm run user:create -- <email> "<name>"` (the password is prompted, or read

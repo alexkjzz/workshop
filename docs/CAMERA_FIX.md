@@ -1,6 +1,6 @@
 # Sentinel-X : correction de la webcam
 
-Correction et vérifications effectuées le 6 octobre 2026.
+Fonctionnement, configuration et procédure de vérification de la webcam locale.
 
 ## Cause du 503 et changements
 
@@ -43,7 +43,7 @@ La reconnaissance faciale MQTT et le flux externe existants restent disponibles.
 
 ## Configuration et lancement
 
-La configuration locale est déjà cohérente :
+Exemple de configuration locale :
 
 ```dotenv
 # ai/.env
@@ -65,27 +65,28 @@ services. Aucun token n'est envoyé au navigateur.
 
 Arrêter avec **Ctrl+C** les anciennes instances dans leurs terminaux avant de
 relancer. La commande backend et Python ci-dessous ne rechargent pas le code
-automatiquement. Le port 8000 est occupé par PHP sur cette machine : l'IA reste
-sur 8001.
+automatiquement. Le port IA par défaut est 8001 ; si vous le changez,
+mettre à jour `AI_PORT` et `AI_SERVICE_URL` ensemble. Ouvrir chacun des terminaux
+ci-dessous à la racine du dépôt.
 
 **Terminal IA :**
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.main
 ```
 
 **Terminal backend :**
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-backend'
+Set-Location .\iot-backend
 node --env-file=.env --import tsx src/main.ts
 ```
 
 **Terminal frontend :**
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-frontend'
+Set-Location .\iot-frontend
 npm.cmd run dev -- --host 127.0.0.1
 ```
 
@@ -114,7 +115,6 @@ React avant le démarrage.
 Depuis la racine :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main'
 npm.cmd --prefix iot-backend test
 npm.cmd --prefix iot-backend run typecheck
 npm.cmd --prefix iot-backend run build
@@ -172,28 +172,19 @@ try {
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/vision/stop -Headers $cameraHeaders
 ```
 
-## Résultats obtenus
+## Points à vérifier
 
-| Vérification | Résultat |
-| --- | --- |
-| Python | 42 tests réussis |
-| Backend | 39 tests réussis ; typecheck et build réussis |
-| Frontend | 15 tests réussis ; lint et build réussis |
-| Capteurs → IA → SQLite → SSE ; panne et reprise | Test d'intégration réussi |
-| Webcam physique → React via Express | Image MJPEG 640 × 480 affichée dans Edge |
-| Deux viewers et déconnexion | Flux partagé ; requête amont annulée |
-| Arrêt et redémarrage immédiat | Webcam libérée, flux masqué, reprise réussie |
-| « Réessayer » après un HTTP 503 provoqué | Nouvel appel start et nouvelle connexion vidéo réussis |
-| YOLO après reprise | Inférence active indépendamment de la capture |
-| YOLO absent | Vidéo réelle disponible, détection explicitement indisponible |
-| Isolation des URLs | Aucune requête du navigateur directement vers Python |
+- Suites Python, backend et frontend ; typecheck, lint et builds.
+- Mesures vers IA, SQLite et SSE, puis panne et reprise du service IA.
+- Webcam vers React via Express : première image, arrêt, reprise et « Réessayer ».
+- Deux viewers utilisant le flux partagé et annulation des requêtes amont.
+- Vidéo brute disponible lorsque YOLO manque ; détection explicitement indisponible.
+- Aucun appel du navigateur directement vers Python.
 
-Il reste à relancer les anciennes instances pour qu'elles utilisent les nouveaux
-fichiers. Aucun échec caméra ne subsiste dans ces vérifications. La disponibilité
-du périphérique dépend toujours des applications qui l'utilisent et des
-autorisations Windows. Pytest émet un avertissement de dépréciation du client
-httpx de Starlette, sans échec de test. Ces essais ne mesurent pas la précision
-de détection ni les performances sur une longue durée.
+Les commandes ci-dessus fournissent les contrôles automatisés. La disponibilité
+du périphérique, les autorisations Windows et les performances doivent être
+vérifiées sur le matériel utilisé. Ces essais ne mesurent pas la précision
+de détection ni la stabilité sur une longue durée.
 
 ## Détection de personnes et reconnaissance faciale
 

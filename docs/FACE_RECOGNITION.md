@@ -1,6 +1,6 @@
 # Face Recognition
 
-Implémentation et validation sous Windows, le 6 octobre 2026.
+Reconnaissance faciale locale avec OpenCV YuNet et SFace.
 
 ## Fonctionnement
 
@@ -66,16 +66,16 @@ Les poids épinglés compatibles OpenCV 4.x proviennent du
 | `face_detection_yunet_2023mar.onnx` | 232 589 octets | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` |
 | `face_recognition_sface_2021dec.onnx` | 38 696 353 octets | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` |
 
-Installation explicite, une fois, avec Internet :
+Installation explicite, une fois, avec Internet ; ouvrir un terminal à la racine :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 # Si OpenCV n'est pas encore installé :
 .\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
 .\.venv\Scripts\python.exe -m app.vision.setup_faces
 ```
 
-Les modèles sont déjà installés et vérifiés dans ce workspace. Le script
+Les modèles sont téléchargés localement et ignorés par Git. Le script
 conserve un modèle dont l'empreinte est correcte et remplace atomiquement un
 fichier différent après vérification. Il télécharge aussi les licences MIT
 (YuNet) et Apache 2.0 (SFace). Aucun téléchargement automatique au démarrage
@@ -84,7 +84,7 @@ traités localement hors ligne.
 
 ## Photos
 
-Le dossier `ai/known_faces/Mohamed/` est créé et attend vos photos :
+Créer un sous-dossier par personne, par exemple `ai/known_faces/Mohamed/` :
 
 ```text
 ai/
@@ -122,8 +122,8 @@ pas de capture faciale exploitable pour cet affichage.
 
 ## Configuration
 
-Les neuf variables ont été ajoutées à `ai/.env` sans modifier les valeurs déjà
-présentes et sont documentées dans `ai/.env.example` :
+Configurer ces variables dans votre fichier local `ai/.env` ; leurs valeurs
+par défaut sont documentées dans `ai/.env.example` :
 
 ```dotenv
 FACE_RECOGNITION_ENABLED=true
@@ -198,33 +198,32 @@ L'historique déduplique sur le cooldown ; le flux courant continue à être mis
 
 Les commandes actuelles ne rechargent pas automatiquement le code serveur.
 Arrêter avec **Ctrl+C** les anciens terminaux IA/backend, puis ouvrir trois
-terminaux PowerShell et lancer :
+terminaux PowerShell à la racine du dépôt et lancer :
 
 Terminal IA :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.main
 ```
 
 Terminal backend :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-backend'
+Set-Location .\iot-backend
 node --env-file=.env --import tsx src/main.ts
 ```
 
 Terminal frontend :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-frontend'
+Set-Location .\iot-frontend
 npm.cmd run dev -- --host 127.0.0.1
 ```
 
 Ouvrir http://127.0.0.1:5173, se connecter avec le compte existant, puis **Caméra**.
-Conserver le broker MQTT déjà lancé pour les capteurs. Le port IA reste 8001,
-ce qui évite le port 8000 déjà occupé sur cette machine. Les tests n'ont pas
-arrêté ni remplacé les services existants.
+Conserver le broker MQTT déjà lancé pour les capteurs. Le port IA par défaut
+est 8001 ; toute modification doit être reportée dans `AI_SERVICE_URL` côté backend.
 
 ## Test simple
 
@@ -238,13 +237,9 @@ et demande ce redémarrage au lieu de rester indéfiniment en attente. Le backen
 convertit un 404 facial en une erreur expliquant le redémarrage nécessaire.
 Le bouton est désactivé lorsque le statut d'un ancien service n'a pas de module facial.
 
-Le 6 octobre, les services locaux concernés ont été redémarrés sur 8001 et
-3001, avec des logs dans `.runtime/sentinel-ai.*.log` et
-`.runtime/sentinel-backend.*.log`. MQTT et Vite ont été conservés. Le nouveau
-service a chargé Mohamed avec 1 référence exploitable ; `2.jpg` et `3.jpg`
-ont été ignorées car YuNet n'y détectait pas de visage. Le rechargement répond
-correctement et sans erreur. Après cette correction, 44 tests backend et
-19 tests frontend passent, ainsi que les builds, le typecheck et le lint.
+Si les logs indiquent qu'une image ne contient pas de visage, remplacer cette
+photo par une image plus nette et frontale, puis recharger le catalogue.
+Seules les références réellement exploitables sont comptées.
 
 ### Présenter les visages
 
@@ -273,39 +268,20 @@ manquant affiche une erreur avec la commande d'installation et conserve le MJPEG
 
 ## Validation
 
-Vérifications effectuées :
+Couverture des contrôles :
 
-- **63 tests Python**, incluant chargement multi-photo, absence/multiples/petit
-  visage, noms accentués, embeddings invalides, seuil, Unknown, cooldown,
-  limite de 20, reload ajout/suppression, échec conservant le catalogue, session
-  caméra périmée, modèle facial absent/lent sans blocage de YOLO ou du JPEG,
-  authentification, routes/stats vision et protection contre les doubles
-  lancements (port libre/occupé, autre service, arrêt par Ctrl+C, vrai Uvicorn).
-- **44 tests Express**, dont contrats JSON, bearer token, routes protégées,
-  relais latest/history/reload et conservation du catalogue après une réponse
-  de statut ancienne. Build et typecheck passent.
-- **19 tests frontend**, dont états vide, personne sans visage, connu/inconnu,
-  plusieurs visages, résultats périmés, modèle absent, reload, désactivation
-  et service hors ligne. Build et lint Oxlint passent.
-- Lint Oxlint du backend et compilation Python `compileall` passent. Aucun
-  linter Python n'est configuré dans le projet.
-- **Vrais modèles** sur deux images publiques OpenCV, dans un dossier temporaire :
-  3 références chargées, image de référence transformée reconnue avec similarité
-  **0,994**, autre visage **Unknown / 0,143**, puis reload à 0 identité.
-- **Webcam physique et Edge** : démarrage, arrêt/reprise, retry, deux viewers,
-  MJPEG 640×480, YOLO/ByteTrack, vraie détection faciale avec 0 identité,
-  rechargement via Express et absence d'appel navigateur → Python. Un autre
-  essai avec YOLO volontairement absent vérifie l'indépendance du module facial.
-- Le rendu **Mohamed / Connu / 91 % / Track #7** et **Inconnu**, avec l'historique,
-  est vérifié par des fixtures SSE dans le serveur éphémère du test navigateur.
-  Ces fixtures n'inscrivent aucune identité dans le catalogue réel. Un décalage
-  entre les résultats SSE et l'horloge de page a été corrigé.
-- Le test d'intégration IA existant passe : parsing des capteurs, fusion/risque,
-  SQLite, SSE, panne/reprise et origines live/simulation.
+- Python : chargement multi-photo, images invalides, embeddings, seuil, Unknown,
+  cooldown, historique, reload et indépendance de la capture/YOLO.
+- Express : contrats JSON, bearer token, routes protégées et proxy facial.
+- Frontend : états absents, connu/inconnu, plusieurs visages, fraîcheur, reload
+  et indisponibilité ; vérification TypeScript, lint et build.
+- Modèles OpenCV : script de comparaison sur des images publiques temporaires.
+- Intégration navigateur/caméra : démarrage, arrêt/reprise, retry, flux partagé,
+  MJPEG et passage exclusif par Express.
 
-La reconnaissance d'un utilisateur réel nécessite ses photos ; le dossier
-Mohamed de production est vide pour le moment. Aucun score de reconnaissance
-de Mohamed par la webcam réelle n'est revendiqué par ces tests.
+Les fixtures de test ne créent aucune identité dans votre catalogue. Évaluer
+séparément la reconnaissance sur vos photos, des personnes non inscrites et
+les conditions réelles de caméra ; aucun score individuel n'est garanti.
 
 Commandes de vérification depuis la racine :
 
@@ -332,8 +308,8 @@ finally { Remove-Item Env:CAMERA_TEST_NO_YOLO }
 Le test de modèles télécharge les deux images publiques OpenCV dans un dossier
 temporaire puis le supprime. Le test caméra utilise des processus/ports/bases/
 profils propres au test et ne sauvegarde pas de frame. La webcam doit être libre.
-Les tests pytest passent avec un avertissement de dépréciation existant du
-TestClient Starlette/httpx ; aucune erreur de test ni de lint ne reste.
+Consulter les résultats de chaque commande pour l'environnement utilisé ; les
+contrôles avec webcam nécessitent un périphérique disponible et ses autorisations.
 
 ## Fichiers ajoutés ou modifiés pour la reconnaissance faciale
 
@@ -355,13 +331,13 @@ ai/app/vision/setup_faces.py      (ajouté)
 ai/app/vision/camera.py
 ai/app/utils/startup.py           (ajouté : réservation du port, détection d'instance active)
 ai/known_faces/README.md          (ajouté)
-ai/known_faces/Mohamed/           (dossier vide pour vos photos)
+ai/known_faces/Nom/               (photos privées, ignorées par Git)
 ai/tests/test_faces.py            (ajouté)
 ai/tests/test_vision.py
 ai/tests/test_startup.py          (ajouté)
 
-ai/models/face_detection_yunet_2023mar.onnx     (modèle local téléchargé)
-ai/models/face_recognition_sface_2021dec.onnx   (modèle local téléchargé)
+ai/models/face_detection_yunet_2023mar.onnx     (à télécharger localement)
+ai/models/face_recognition_sface_2021dec.onnx   (à télécharger localement)
 ai/models/face_detection_yunet.LICENSE         (ajouté)
 ai/models/face_recognition_sface.LICENSE       (ajouté)
 

@@ -5,6 +5,10 @@ L'IA analyse ses mesures via HTTP local. Express conserve les resultats dans
 SQLite et les diffuse via **SSE**, le transport deja present dans le projet.
 La webcam est celle du PC serveur, jamais celle du navigateur.
 
+Les blocs PowerShell qui commencent par `Set-Location` supposent un nouveau
+terminal ouvert a la racine du depot. Aucun modele Isolation Forest entraine
+sur des capteurs reels n'est fourni : suivre la section d'entrainement ci-dessous.
+
 ```mermaid
 flowchart TD
     ESP[ESP8266 DHT22 / MQ-2 / PIR] -->|USB serie| Bridge[Passerelle Python]
@@ -30,8 +34,7 @@ flowchart TD
 ## Installation Windows
 
 Prerequis : **Node.js >= 22.13** (24 conseille), **Python 3.12 x64**, Mosquitto
-pour les capteurs ou le simulateur. Le code et les dependances Python ont ete
-verifies sous Python 3.12 et Windows. Telecharger Mosquitto depuis
+pour les capteurs ou le simulateur. Telecharger Mosquitto depuis
 [son site officiel](https://mosquitto.org/download/), s'il n'est pas installe.
 
 Depuis la racine, PowerShell :
@@ -48,7 +51,7 @@ service ou simulateur ne demarre automatiquement.
 Installation Python manuelle equivalente :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -64,8 +67,8 @@ L'activation est facultative. Si souhaitee :
 Sans webcam, installer `requirements-core.txt` ou utiliser
 `setup-windows.ps1 -CoreOnly`. La vision importe ses dependances uniquement
 lors du demarrage de la camera. `requirements-test.txt` ajoute pytest.
-`requirements-lock.txt` contient les versions effectivement verifiees, y
-compris les dependances de vision et de test.
+`requirements-lock.txt` epingle les dependances de vision et de test pour
+reproduire l'environnement Python.
 
 ## Lancement du projet complet
 
@@ -74,7 +77,7 @@ Executer d'abord le script d'installation. Ouvrir trois terminaux PowerShell.
 **Terminal backend** :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-backend'
+Set-Location .\iot-backend
 # Premiere fois seulement : creer le compte (mot de passe demande, 12 caracteres minimum).
 npm run user:create -- operateur@sentinel.test "Operateur"
 node --env-file=.env --import tsx src/main.ts
@@ -83,14 +86,14 @@ node --env-file=.env --import tsx src/main.ts
 **Terminal frontend** :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\iot-frontend'
+Set-Location .\iot-frontend
 npm run dev -- --host 127.0.0.1
 ```
 
 **Terminal IA** :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.main
 ```
 
@@ -104,7 +107,6 @@ Le firmware actuel transmet les mesures par USB. Dans un quatrieme terminal,
 utiliser le broker strictement local fourni s'il n'est pas deja demarre :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main'
 & 'C:\Program Files\mosquitto\mosquitto.exe' -c .\scripts\mosquitto-local.conf -v
 ```
 
@@ -131,13 +133,15 @@ puis relancer ; cette commande ne remplace pas automatiquement un serveur actif.
 
 ## Entrainement sur mesures reelles
 
-Le CSV fourni ne contient qu'un en-tete : **aucune mesure fictive en production**.
+`data/sensor_data.example.csv` fournit uniquement l'en-tete du format CSV.
+`data/sensor_data.csv` est genere par l'export local et ignore par Git ; vos
+mesures ne sont pas publiees avec le depot.
 Collecter un historique normal representatif (au moins 128 valeurs observees
 pour chacun des quatre champs, idealement plusieurs milliers et plusieurs
 conditions normales). Choisir les periodes normales avant l'entrainement.
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.integrations.backend_client --database ..\iot-backend\data\telemetry.db --output data\sensor_data.csv
 # Relire/filtrer le CSV pour conserver les conditions normales.
 .\.venv\Scripts\python.exe -m app.anomaly.trainer
@@ -182,7 +186,7 @@ sa camera fictive : ne pas l'utiliser pour cette demonstration de webcam reelle.
 Creer et entrainer un **modele de demonstration distinct** :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.simulator --generate-training data\simulated_normal.csv
 .\.venv\Scripts\python.exe -m app.anomaly.trainer --csv data\simulated_normal.csv --output models\demo_isolation_forest.joblib
 $env:ANOMALY_MODEL = 'models/demo_isolation_forest.joblib'
@@ -192,7 +196,7 @@ $env:ANOMALY_MODEL = 'models/demo_isolation_forest.joblib'
 Avec backend, frontend et broker lances, dans un autre terminal :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.simulator
 ```
 
@@ -214,7 +218,7 @@ Installer les dependances de vision et telecharger explicitement les poids
 avant la demonstration (Internet necessaire une fois) :
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
 Invoke-WebRequest -Uri 'https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt' -OutFile .\models\yolov8n.pt
 ```
@@ -254,7 +258,7 @@ YuNet pour les visages et SFace pour leurs embeddings, sans remplacer YOLO ni
 ByteTrack. Il utilise les dépendances OpenCV/NumPy déjà installées.
 
 ```powershell
-Set-Location 'C:\Users\the-b\OneDrive\Bureau\workshop-main\ai'
+Set-Location .\ai
 .\.venv\Scripts\python.exe -m app.vision.setup_faces
 ```
 
@@ -414,8 +418,9 @@ Set-Location ..
 node .\scripts\check-ai-integration.mjs
 ```
 
-Les tests couvrent preprocessing identique, normal/anomalie artificielle via
-Isolation Forest entraine, donnees manquantes, schemas, risques, fusion,
+Les tests entrainent leurs propres modeles temporaires sur des donnees
+synthetiques pour verifier normal/anomalie et le preprocessing commun. Ils
+couvrent aussi donnees manquantes, schemas, risques, fusion,
 fraicheur, health, token, absence camera/modele, confirmation multi-frame,
 demarrage/arret/reprise, panne et reprise de l'IA, SQLite, protection des routes
 et SSE. L'integration lance un Python temporaire et utilise de vrais appels

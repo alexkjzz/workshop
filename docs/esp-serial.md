@@ -133,19 +133,8 @@ et les anciennes mesures restent dans l'historique. Les commandes LED du
 dashboard utilisent MQTT et necessitent un firmware reseau ; le firmware
 serie actuel commande ses LEDs localement.
 
-Si la passerelle a ete lancee en arriere-plan par Codex, son PID est conserve
-dans `.runtime/sentinel-services.json` (`espBridgePid`) et les logs dans
-`.runtime/esp-bridge.err.log`. Ne pas lancer une deuxieme passerelle sur le
-meme port. Pour arreter uniquement cette instance avant de revenir au moniteur
-serie, depuis la racine :
-
-```powershell
-$sentinelState = Get-Content .\.runtime\sentinel-services.json -Raw | ConvertFrom-Json
-$espProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $($sentinelState.espBridgePid)"
-if ($espProcess.CommandLine -like '*esp_serial_bridge.py*') {
-    Stop-Process -Id $espProcess.ProcessId
-}
-```
+Démarrer la passerelle dans un terminal dédié et l'arrêter avec **Ctrl+C**
+avant de rouvrir le moniteur série. Ne pas lancer deux passerelles sur le même port.
 
 Les tests de parsing, de préchauffage, de sélection des ports et de tampon
 ne nécessitent aucun matériel ni broker :
