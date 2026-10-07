@@ -1,0 +1,35 @@
+{
+  "name": "iot-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "user:create": "tsx src/cli/create-user.ts",
+    "simulate": "tsx src/tools/simulator.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "better-auth": "^1.7.7",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mqtt": "^5.16.0",
+    "nodemailer": "^10.0.15"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "@types/nodemailer": "^8.0.2",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

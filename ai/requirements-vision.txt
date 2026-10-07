@@ -1,0 +1,6 @@
+opencv-python>=4.10,<5
+# YuNet/SFace use these existing OpenCV bindings; no dlib/InsightFace dependency.
+# Fetch the two verified ONNX models explicitly: python -m app.vision.setup_faces
+ultralytics>=8.3,<9
+# ByteTrack association, installed explicitly to avoid runtime auto-installation.
+lap>=0.5.12,<1

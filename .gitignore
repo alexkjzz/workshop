@@ -1,0 +1,30 @@
+.runtime/
+.env
+# Local biometric references must not be committed.
+ai/known_faces/*
+!ai/known_faces/README.md
+
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+
+# Python / IA
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# PlatformIO / ESP8266
+.pio/
+.vscode/.browse.c_cpp.db*
+.vscode/ipch/
+
+# OS
+.DS_Store
+Thumbs.db

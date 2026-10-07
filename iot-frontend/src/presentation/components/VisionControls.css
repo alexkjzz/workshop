@@ -1,0 +1,43 @@
+.vision-controls {
+  margin-top: 16px;
+}
+
+.vision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vision-buttons button {
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
+  padding: 7px 14px;
+  color: var(--text);
+  background: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vision-buttons button:hover:not(:disabled) {
+  color: var(--button-text);
+  background: var(--button-bg);
+}
+
+.vision-buttons button:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 3px;
+}
+
+.vision-buttons button:disabled {
+  color: var(--disabled-text);
+  border-color: var(--disabled-border);
+  background: var(--disabled-bg);
+  cursor: not-allowed;
+}
+
+.vision-command-message {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}

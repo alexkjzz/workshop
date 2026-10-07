@@ -1,0 +1,152 @@
+.ai-panel {
+  margin-top: 32px;
+}
+
+.ai-panel h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 24px;
+  margin: 0;
+}
+
+.ai-metric {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+
+.ai-metric dt {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.ai-metric dd {
+  margin: 5px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ai-metric--alert dd {
+  color: var(--danger);
+}
+
+.ai-panel small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ai-notice,
+.ai-error {
+  margin: 12px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ai-notice {
+  color: var(--text-muted);
+}
+
+.ai-error {
+  color: var(--danger);
+}
+
+.ai-analysis {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.ai-analysis p {
+  margin: 6px 0;
+}
+
+.ai-analysis p > span {
+  display: inline-block;
+  min-width: 145px;
+  color: var(--text-muted);
+}
+
+.ai-reasons {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+}
+
+.ai-vision {
+  margin-top: 24px;
+}
+
+.ai-vision-state,
+.ai-frame-time {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.ai-vision .camera-feed {
+  max-width: 480px;
+}
+
+.ai-performance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 16px 0 0;
+  font-size: 13px;
+}
+
+.ai-performance dt {
+  color: var(--text-muted);
+}
+
+.ai-performance dd {
+  margin: 3px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-events {
+  margin-top: 24px;
+}
+
+.ai-events .history {
+  max-height: 300px;
+}
+
+.ai-events th,
+.ai-events td {
+  padding-right: 12px;
+  vertical-align: top;
+}
+
+.ai-events th:first-child,
+.ai-events td:first-child {
+  width: 145px;
+}
+
+.ai-events td:last-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .ai-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+  }
+
+  .ai-events .history {
+    overflow-x: auto;
+  }
+
+  .ai-events table {
+    min-width: 520px;
+  }
+}

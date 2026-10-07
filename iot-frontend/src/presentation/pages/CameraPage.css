@@ -1,0 +1,53 @@
+.camera {
+  width: min(100% - 32px, 760px);
+  margin: auto;
+  padding: 40px 0 56px;
+}
+
+.camera h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.camera-ai-summary,
+.camera-ai-error {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.camera-ai-error {
+  color: var(--danger);
+}
+
+.detection {
+  margin-top: 40px;
+}
+
+.detection-current {
+  margin: 16px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.detection-current--alert::before {
+  content: '⚠ ';
+}
+
+.camera .history {
+  max-height: 300px;
+  margin-top: 16px;
+}
+
+.camera .history td:nth-child(2),
+.camera .history th:nth-child(2) {
+  text-align: right;
+  padding-right: 24px;
+}
+
+.camera .history td:last-child,
+.camera .history th:last-child {
+  text-align: left;
+}

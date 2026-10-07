@@ -1,0 +1,31 @@
+.esp-status {
+  margin-bottom: 32px;
+}
+
+.esp-status-message {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.esp-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin: 18px 0 0;
+}
+
+.esp-status-grid dt {
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.esp-status-grid dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .esp-status-grid {
+    grid-template-columns: 1fr;
+  }
+}

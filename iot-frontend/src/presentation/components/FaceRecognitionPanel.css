@@ -1,0 +1,44 @@
+.face-catalog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.face-catalog button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.face-catalog button:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.face-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.face-recognition-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.face-recognition-card h3 {
+  margin: 0 0 8px;
+}
+
+.face-recognition-card p {
+  margin: 8px 0 0;
+}
+
+.face-known { color: var(--success, #16a34a); }
+.face-unknown { color: var(--danger); }
