@@ -20,17 +20,23 @@ export function useDeviceStatus(onSessionExpired: () => void) {
 
   useEffect(() => {
     let disposed = false;
+    let refreshing = false;
 
     const refreshStatus = async () => {
+      if (refreshing) return;
+      refreshing = true;
       try {
         const nextStatus = await deviceApi.getStatus();
         if (disposed) return;
         setStatus(nextStatus);
         setLoadError('');
       } catch (error) {
+        if (disposed) return;
+        setStatus(null);
         if (error instanceof UnauthorizedError) sessionExpiredRef.current();
-        else if (!disposed) setLoadError(error instanceof Error ? error.message : 'Erreur de connexion.');
+        else setLoadError(error instanceof Error ? error.message : 'Erreur de connexion.');
       } finally {
+        refreshing = false;
         if (!disposed) setLoading(false);
       }
     };
@@ -44,6 +50,7 @@ export function useDeviceStatus(onSessionExpired: () => void) {
   }, [deviceApi]);
 
   const sendCommand = async (command: DeviceCommand) => {
+    if (!status?.mqttConnected || loadError || sendingCommand) return;
     setSendingCommand(true);
     setCommandMessage('');
     try {

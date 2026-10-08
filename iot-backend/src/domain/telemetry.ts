@@ -1,4 +1,12 @@
-export interface Telemetry {
+export const DEVICE_FLAG_KEYS = [
+  'climateValid', 'gasReady', 'pirReady', 'gasAlert', 'alarmActive',
+  'ledRed', 'ledOrange', 'ledGreen',
+] as const;
+
+// Missing flags mean an older device did not report its state.
+export type DeviceFlags = Partial<Record<(typeof DEVICE_FLAG_KEYS)[number], boolean>>;
+
+export interface Telemetry extends DeviceFlags {
   temperature?: number;
   humidity?: number;
   gas?: number;
@@ -9,11 +17,14 @@ export interface Telemetry {
 export interface TelemetryMeasurement {
   telemetry: Telemetry;
   measuredAt?: Date;
+  source?: 'live' | 'simulation';
 }
 
 export interface Reading extends Telemetry {
   id: number;
   recordedAt: Date;
+  // Legacy database rows have no proven source and deliberately remain undefined.
+  source?: 'live' | 'simulation';
 }
 
 export interface DeviceStatus {

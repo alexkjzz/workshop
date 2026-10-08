@@ -44,7 +44,7 @@ function NotificationForm({ initial, busy, onSave, onSendTest, onInvalid }: Noti
         <input
           type="email"
           autoComplete="email"
-          placeholder="operateur@aethercorp.fr"
+          placeholder="vous@exemple.fr"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
@@ -99,7 +99,12 @@ export function SettingsPage({ onSessionExpired }: { onSessionExpired: () => voi
 
   return (
     <main className="settings">
-      <section aria-labelledby="notifications-title">
+      <header className="page-intro">
+        <p className="page-eyebrow">Vos préférences</p>
+        <h1>Paramètres</h1>
+        <p>Choisissez où recevoir les alertes et les événements à surveiller.</p>
+      </header>
+      <section className="settings-card" aria-labelledby="notifications-title">
         <div className="section-heading">
           <h2 id="notifications-title">Notifications</h2>
           <span>Par e-mail uniquement</span>

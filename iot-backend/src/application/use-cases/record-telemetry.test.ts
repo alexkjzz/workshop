@@ -7,8 +7,8 @@ import { RecordTelemetry } from './record-telemetry.js';
 
 class InMemoryReadings implements ReadingRepository {
   readings: Reading[] = [];
-  save(telemetry: Telemetry, recordedAt: Date): Reading {
-    const reading = { id: this.readings.length + 1, recordedAt, ...telemetry };
+  save(telemetry: Telemetry, recordedAt: Date, source: 'live' | 'simulation' = 'live'): Reading {
+    const reading = { id: this.readings.length + 1, recordedAt, ...telemetry, source };
     this.readings.push(reading);
     return reading;
   }
@@ -49,4 +49,30 @@ test('a replayed reading is stored at its time without replacing the latest stat
 
   assert.equal(replayed.recordedAt.toISOString(), '2026-10-06T09:57:00.000Z');
   assert.deepEqual(state.latest().telemetry, { gas: 130 });
+});
+
+test('hardware flags reach device status, history and live reading events unchanged', () => {
+  const { readings, state, published, recordTelemetry } = setup();
+  const telemetry = {
+    gas: 625, presence: true, climateValid: false, gasReady: true, pirReady: true,
+    gasAlert: true, alarmActive: true, ledRed: true, ledOrange: false, ledGreen: false,
+  };
+  const reading = recordTelemetry.execute({ telemetry, source: 'live' });
+  assert.deepEqual(state.latest().telemetry, telemetry);
+  assert.deepEqual(readings.findRecent(1), [reading]);
+  assert.deepEqual(published, [{ type: 'reading', reading, source: 'live' }]);
+});
+
+test('simulation remains stored and streamed without replacing the physical status', () => {
+  const { readings, state, published, recordTelemetry } = setup();
+  const physical = recordTelemetry.execute({ telemetry: { gas: 38, gasReady: true,
+    alarmActive: true, ledRed: true }, source: 'live' });
+  const simulated = recordTelemetry.execute({ telemetry: { gas: 700, alarmActive: false,
+    ledRed: false }, source: 'simulation' });
+  assert.equal(simulated.source, 'simulation');
+  assert.equal(readings.readings.length, 2);
+  assert.deepEqual(readings.findRecent(2), [physical, simulated]);
+  assert.deepEqual(state.latest(), { telemetry: { gas: 38, gasReady: true, alarmActive: true,
+    ledRed: true }, lastMessageAt: physical.recordedAt });
+  assert.deepEqual(published.at(-1), { type: 'reading', reading: simulated, source: 'simulation' });
 });

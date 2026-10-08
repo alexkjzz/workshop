@@ -1,5 +1,9 @@
 export class InvalidRequestError extends Error {}
 
+export class FaceEnrollmentError extends Error {
+  constructor(message: string, readonly statusCode: 400 | 413 | 422 | 503) { super(message); }
+}
+
 // The device cannot be reached (broker disconnected).
 export class DeviceUnavailableError extends Error {}
 
@@ -13,3 +17,7 @@ export class MailUnavailableError extends Error {}
 export class MailDeliveryError extends Error {}
 
 export class RateLimitedError extends Error {}
+
+export class CameraStreamUnavailableError extends Error {
+  constructor(message: string, readonly statusCode = 503) { super(message); }
+}

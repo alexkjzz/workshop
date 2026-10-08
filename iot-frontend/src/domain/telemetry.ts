@@ -3,9 +3,17 @@ export interface Telemetry {
   humidity?: number;
   gas?: number;
   presence?: boolean;
+  climateValid?: boolean;
+  gasReady?: boolean;
+  pirReady?: boolean;
+  gasAlert?: boolean;
+  alarmActive?: boolean;
+  ledRed?: boolean;
+  ledOrange?: boolean;
+  ledGreen?: boolean;
 }
 
-export type MetricKey = keyof Telemetry;
+export type MetricKey = 'temperature' | 'humidity' | 'gas' | 'presence';
 
 export interface DeviceStatus {
   mqttConnected: boolean;
@@ -34,9 +42,12 @@ export function mergeReadings(current: Reading[], incoming: Reading[]): Reading[
 
 // Numeric value of a metric (presence: 0 or 1), undefined when not measured.
 export function metricValue(telemetry: Telemetry | null | undefined, key: MetricKey): number | undefined {
+  if ((key === 'temperature' || key === 'humidity') && telemetry?.climateValid === false) return undefined;
+  if (key === 'gas' && telemetry?.gasReady === false) return undefined;
+  if (key === 'presence' && telemetry?.pirReady === false) return undefined;
   const value = telemetry?.[key];
   if (value === undefined) return undefined;
-  return typeof value === 'boolean' ? Number(value) : value;
+  return typeof value === 'boolean' ? Number(value) : Number.isFinite(value) ? value : undefined;
 }
 
 export interface TimedValue {

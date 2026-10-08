@@ -8,8 +8,9 @@
     "build": "tsc",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test 'src/**/*.test.ts'",
-    "user:create": "tsx src/cli/create-user.ts"
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "user:create": "tsx src/cli/create-user.ts",
+    "simulate": "tsx src/tools/simulator.ts"
   },
   "keywords": [],
   "author": "",

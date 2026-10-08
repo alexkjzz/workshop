@@ -15,6 +15,16 @@ const frontendOrigins = (process.env.FRONTEND_ORIGINS ?? 'http://localhost:5173,
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const aiServiceUrl = process.env.AI_SERVICE_URL ?? 'http://127.0.0.1:8001';
+if (aiServiceUrl && !['http:', 'https:'].includes(new URL(aiServiceUrl).protocol)) {
+  throw new Error('AI_SERVICE_URL must be an HTTP URL, or empty to disable AI.');
+}
+const aiTimeoutMs = Number(process.env.AI_TIMEOUT_MS ?? 5000);
+const aiPollMs = Number(process.env.AI_POLL_MS ?? 2000);
+if (!Number.isFinite(aiTimeoutMs) || aiTimeoutMs < 100 || !Number.isFinite(aiPollMs) || aiPollMs < 250) {
+  throw new Error('AI_TIMEOUT_MS must be at least 100 and AI_POLL_MS at least 250.');
+}
+
 export const config = {
   port,
   mqttUrl: process.env.MQTT_URL ?? 'mqtt://127.0.0.1:1883',
@@ -22,7 +32,8 @@ export const config = {
   commandTopic: process.env.MQTT_COMMAND_TOPIC ?? 'esp8266/led',
   visionTopic: process.env.MQTT_VISION_TOPIC ?? 'sentinel/vision',
   // MJPEG stream of the AI team's vision script, relayed behind authentication.
-  visionStreamUrl: process.env.VISION_STREAM_URL ?? '',
+  visionStreamUrl: process.env.VISION_STREAM_URL ?? (aiServiceUrl ? `${aiServiceUrl.replace(/\/$/, '')}/stream.mjpg` : ''),
+  ai: { url: aiServiceUrl, timeoutMs: aiTimeoutMs, pollMs: aiPollMs, token: process.env.AI_SERVICE_TOKEN ?? '' },
   telemetryDatabasePath: process.env.TELEMETRY_DATABASE_PATH ?? 'data/telemetry.db',
   retentionDays,
   settingsDatabasePath: process.env.SETTINGS_DATABASE_PATH ?? 'data/settings.db',

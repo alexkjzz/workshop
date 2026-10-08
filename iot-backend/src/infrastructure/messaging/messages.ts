@@ -1,8 +1,18 @@
 // MQTT payloads -> domain objects. Anything malformed is rejected as a whole.
-import type { TelemetryMeasurement, Telemetry } from '../../domain/telemetry.js';
+import type { DeviceFlags, TelemetryMeasurement, Telemetry } from '../../domain/telemetry.js';
 import type { Face, VisionDetection } from '../../domain/vision.js';
 
 const MAX_FACES = 20;
+const FLAG_ALIASES: Record<keyof DeviceFlags, readonly string[]> = {
+  climateValid: ['climateValid', 'climate_valid'],
+  gasReady: ['gasReady', 'gas_ready'],
+  pirReady: ['pirReady', 'pir_ready'],
+  gasAlert: ['gasAlert', 'gas_alert'],
+  alarmActive: ['alarmActive', 'alarm_active', 'alarm'],
+  ledRed: ['ledRed', 'led_red'],
+  ledOrange: ['ledOrange', 'led_orange'],
+  ledGreen: ['ledGreen', 'led_green'],
+};
 
 function parseObject(message: string): Record<string, unknown> | null {
   let value: unknown;
@@ -18,14 +28,21 @@ function parseObject(message: string): Record<string, unknown> | null {
 
 // Optional `ts` field: epoch seconds. undefined if absent, null if invalid.
 function parseTimestamp(input: Record<string, unknown>): Date | undefined | null {
-  if (!('ts' in input)) return undefined;
-  return typeof input.ts === 'number' && Number.isFinite(input.ts) ? new Date(input.ts * 1000) : null;
+  if ('ts' in input) {
+    if (typeof input.ts !== 'number' || !Number.isFinite(input.ts)) return null;
+    const date = new Date(input.ts * 1000);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (!('timestamp' in input)) return undefined;
+  if (typeof input.timestamp !== 'string') return null;
+  const date = new Date(input.timestamp);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 /**
  * Box telemetry on MQTT_TELEMETRY_TOPIC:
  * {"temperature":22.5,"humidity":48,"gas":120,"presence":true,"ts":1791280000}
- * All fields are optional; other fields (device, rssi) are ignored.
+ * Sensor fields and boolean device flags are optional. Other fields (device, rssi) are ignored.
  */
 export function parseTelemetryMessage(message: string): TelemetryMeasurement | null {
   const input = parseObject(message);
@@ -40,14 +57,27 @@ export function parseTelemetryMessage(message: string): TelemetryMeasurement | n
     }
   }
   if ('presence' in input) {
-    if (typeof input.presence !== 'boolean') return null;
-    telemetry.presence = input.presence;
+    if (typeof input.presence !== 'boolean' && input.presence !== 0 && input.presence !== 1) return null;
+    telemetry.presence = Boolean(input.presence);
+  }
+  for (const field of Object.keys(FLAG_ALIASES) as Array<keyof DeviceFlags>) {
+    for (const alias of FLAG_ALIASES[field]) {
+      if (!(alias in input)) continue;
+      const value = input[alias];
+      // Reject conflicting aliases rather than inventing a device state.
+      if (typeof value !== 'boolean' || (telemetry[field] !== undefined && telemetry[field] !== value)) return null;
+      telemetry[field] = value;
+    }
   }
   if (Object.keys(telemetry).length === 0) return null;
 
   const measuredAt = parseTimestamp(input);
   if (measuredAt === null) return null;
-  return measuredAt ? { telemetry, measuredAt } : { telemetry };
+  return {
+    telemetry,
+    ...(measuredAt ? { measuredAt } : {}),
+    ...(input.source === 'live' || input.source === 'simulation' ? { source: input.source } : {}),
+  };
 }
 
 function parseFace(value: unknown): Face | null {
@@ -62,7 +92,7 @@ function parseFace(value: unknown): Face | null {
 /**
  * Contract with the AI team's vision script, on MQTT_VISION_TOPIC:
  * {"ts":1791280000,"persons":1,"faces":[{"name":"Alice","confidence":0.92}]}
- * `name` is null for an unknown face; `ts` and `persons` are optional.
+ * `name` is null for an unknown face; `ts`, `persons` and `source` are optional.
  */
 export function parseVisionMessage(message: string, receivedAt: Date): VisionDetection | null {
   const input = parseObject(message);
@@ -76,5 +106,6 @@ export function parseVisionMessage(message: string, receivedAt: Date): VisionDet
 
   const detectedAt = parseTimestamp(input);
   if (detectedAt === null) return null;
-  return { detectedAt: detectedAt ?? receivedAt, persons, faces: faces as Face[] };
+  return { detectedAt: detectedAt ?? receivedAt, persons, faces: faces as Face[],
+    ...(input.source === 'live' || input.source === 'simulation' ? { source: input.source } : {}) };
 }

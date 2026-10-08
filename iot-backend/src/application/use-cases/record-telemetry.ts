@@ -11,11 +11,11 @@ export class RecordTelemetry {
     private readonly retentionMs: number,
   ) {}
 
-  execute({ telemetry, measuredAt }: TelemetryMeasurement): Reading {
+  execute({ telemetry, measuredAt, source }: TelemetryMeasurement): Reading {
     const recordedAt = resolveRecordedAt(measuredAt, this.clock.now(), this.retentionMs);
-    const reading = this.readings.save(telemetry, recordedAt);
+    const reading = this.readings.save(telemetry, recordedAt, source ?? 'live');
     this.state.applyReading(reading);
-    this.events.publish({ type: 'reading', reading });
+    this.events.publish({ type: 'reading', reading, ...(source ? { source } : {}) });
     return reading;
   }
 }

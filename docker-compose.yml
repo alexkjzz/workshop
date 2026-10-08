@@ -12,6 +12,11 @@ services:
       MQTT_TELEMETRY_TOPIC: esp8266/donnees
       MQTT_COMMAND_TOPIC: esp8266/led
       MQTT_VISION_TOPIC: ${MQTT_VISION_TOPIC:-sentinel/vision}
+      # Optional Python service on the local server; empty preserves web-only operation.
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-5000}
+      AI_POLL_MS: ${AI_POLL_MS:-2000}
       # Flux MJPEG du script vision de l'equipe IA (relaye derriere l'authentification).
       VISION_STREAM_URL: ${VISION_STREAM_URL:-}
       READINGS_RETENTION_DAYS: ${READINGS_RETENTION_DAYS:-7}

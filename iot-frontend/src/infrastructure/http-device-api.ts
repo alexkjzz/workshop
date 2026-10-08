@@ -6,7 +6,7 @@ import { jsonBody, requestJson } from './http-client';
 // Same origin: Vite (or nginx) forwards /api to the backend; the session cookie follows.
 export class HttpDeviceApi implements DeviceApi {
   getStatus() {
-    return requestJson<DeviceStatus>('/api/status', undefined, 'Impossible de lire le statut du serveur.');
+    return requestJson<DeviceStatus>('/api/status', { signal: AbortSignal.timeout(5000) }, 'Impossible de lire le statut du serveur.');
   }
 
   async getReadings(limit: number) {

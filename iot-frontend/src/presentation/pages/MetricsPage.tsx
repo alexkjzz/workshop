@@ -1,4 +1,9 @@
+import { useEffect, useState } from 'react';
 import { metricSeries, metricValue, type DeviceCommand, type DeviceStatus, type Reading } from '../../domain/telemetry';
+import { currentDeviceTelemetry } from '../../domain/esp-status';
+import type { AiPrediction, AiStatus } from '../../domain/ai';
+import { AiPanel } from '../components/AiPanel';
+import { EspStatusPanel } from '../components/EspStatusPanel';
 import { LineChart } from '../components/LineChart';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { metricViews, type MetricView } from '../metrics';
@@ -15,6 +20,11 @@ interface MetricsPageProps {
   commandMessage: string;
   sendingCommand: boolean;
   sendCommand: (order: DeviceCommand) => Promise<void>;
+  aiPredictions: AiPrediction[];
+  aiStatus: AiStatus | null;
+  aiLoadError: string;
+  refreshAi: () => Promise<void>;
+  onSessionExpired: () => void;
 }
 
 const timeFormat = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'medium' });
@@ -26,6 +36,7 @@ function MetricHistory({ metric, readings }: { metric: MetricView; readings: Rea
   return (
     <>
       <LineChart points={points} label={metric.label} formatValue={metric.format} steps={metric.steps} />
+      <p className="reading-history-label">Dernières mesures</p>
       <div className="history">
         <table>
           <caption className="visually-hidden">Valeurs précédentes : {metric.label}</caption>
@@ -62,8 +73,27 @@ export function MetricsPage({
   commandMessage,
   sendingCommand,
   sendCommand,
+  aiPredictions,
+  aiStatus,
+  aiLoadError,
+  refreshAi,
+  onSessionExpired,
 }: MetricsPageProps) {
-  const telemetry = status?.telemetry;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setNow(Date.now()));
+    return () => window.cancelAnimationFrame(frame);
+  }, [status]);
+  const telemetry = loadError ? null : currentDeviceTelemetry(status, now);
+  const espMessage = loadError ? 'Backend indisponible. Les états du boîtier ne sont plus vérifiables.'
+    : !status?.lastMessageAt ? 'En attente des premières mesures du boîtier ESP.'
+    : !status.mqttConnected ? 'Broker MQTT déconnecté. En attente de nouvelles mesures.'
+    : !telemetry ? 'Aucune mesure récente du boîtier ESP. Vérifiez sa connexion.' : '';
+  const commandsAvailable = !!status?.mqttConnected && !loadError && !sendingCommand;
   const lastMessage = status?.lastMessageAt
     ? timeFormat.format(new Date(status.lastMessageAt))
     : 'Aucun message reçu';
@@ -71,14 +101,25 @@ export function MetricsPage({
   return (
     <main className="dashboard">
       <header className="page-header">
-        {loading ? (
-          <StatusIndicator tone="neutral" label="Connexion au serveur..." />
-        ) : status?.mqttConnected ? (
-          <StatusIndicator tone="success" label="Broker MQTT connecté" />
-        ) : (
-          <StatusIndicator tone="danger" label="Broker MQTT déconnecté" />
-        )}
+        <div className="page-intro">
+          <p className="page-eyebrow">Surveillance du boîtier</p>
+          <h1>Métriques</h1>
+          <p>Suivez les capteurs, l’état de votre ESP et les analyses de Sentinel-X.</p>
+        </div>
+        <div className="dashboard-connection">
+          {loading ? (
+            <StatusIndicator tone="neutral" label="Connexion au serveur..." />
+          ) : loadError ? (
+            <StatusIndicator tone="danger" label="Backend indisponible" />
+          ) : status?.mqttConnected ? (
+            <StatusIndicator tone="success" label="Broker MQTT connecté" />
+          ) : (
+            <StatusIndicator tone="danger" label="Broker MQTT déconnecté" />
+          )}
+        </div>
       </header>
+
+      <EspStatusPanel telemetry={telemetry} message={espMessage} />
 
       <section className="readings" aria-labelledby="readings-title">
         <div className="section-heading">
@@ -91,7 +132,9 @@ export function MetricsPage({
             return (
               <div className="reading" key={metric.key}>
                 <dt>{metric.label}</dt>
-                <dd>{value === undefined ? 'Aucune donnée' : metric.format(value)}</dd>
+                <dd className={value === undefined ? 'reading-value--empty' : undefined}>
+                  {value === undefined ? 'Aucune donnée' : metric.format(value)}
+                </dd>
                 <MetricHistory metric={metric} readings={readings} />
               </div>
             );
@@ -99,19 +142,31 @@ export function MetricsPage({
         </dl>
       </section>
 
+      <AiPanel
+        status={aiStatus}
+        predictions={aiPredictions}
+        loadError={aiLoadError}
+        onRefresh={refreshAi}
+        onSessionExpired={onSessionExpired}
+      />
+
       <section className="commands" aria-labelledby="commands-title">
-        <h2 id="commands-title">Commande LED</h2>
+        <div className="section-heading">
+          <h2 id="commands-title">Commande LED</h2>
+          <span>Contrôle du boîtier</span>
+        </div>
+        <p className="command-note">Les commandes LED nécessitent un firmware MQTT ; la passerelle USB transmet uniquement les mesures.</p>
         <div className="command-buttons">
           <button
             type="button"
-            disabled={!status?.mqttConnected || sendingCommand}
+            disabled={!commandsAvailable}
             onClick={() => void sendCommand('ON')}
           >
             Allumer
           </button>
           <button
             type="button"
-            disabled={!status?.mqttConnected || sendingCommand}
+            disabled={!commandsAvailable}
             onClick={() => void sendCommand('OFF')}
           >
             Éteindre

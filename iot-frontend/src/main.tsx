@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import type { Services } from './application/ports'
 import { BetterAuthService } from './infrastructure/better-auth-service'
 import { HttpDeviceApi } from './infrastructure/http-device-api'
+import { HttpAiApi } from './infrastructure/http-ai-api'
 import { HttpSettingsApi } from './infrastructure/http-settings-api'
 import { LocalThemeStore } from './infrastructure/local-theme-store'
 import { SseLiveFeed } from './infrastructure/sse-live-feed'
@@ -13,6 +14,7 @@ import './presentation/index.css'
 
 const services: Services = {
   deviceApi: new HttpDeviceApi(),
+  aiApi: new HttpAiApi(),
   settingsApi: new HttpSettingsApi(),
   liveFeed: new SseLiveFeed(),
   auth: new BetterAuthService(),

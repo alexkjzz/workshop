@@ -1,0 +1,24 @@
+* text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.env.example text eol=lf
+
+# Keep shell scripts and source portable between Windows and Linux.
+*.sh text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.ps1 text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.ini text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary

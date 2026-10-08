@@ -1,1 +1,59 @@
+# Local configuration and credentials (examples remain publishable)
+.env
+.env.*
+!.env.example
+secrets.h
+certs/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Runtime, private databases, logs and captured sensor data
 .runtime/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.log
+logs/
+ai/data/*.csv
+!ai/data/*.example.csv
+
+# Biometric references and local model artifacts
+ai/known_faces/*
+!ai/known_faces/README.md
+ai/faces/
+*.joblib
+*.pkl
+*.pickle
+*.pt
+*.onnx
+
+# Node and Python generated files
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# PlatformIO, editors and operating system
+.pio/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.local
+*.swp
+*.swo

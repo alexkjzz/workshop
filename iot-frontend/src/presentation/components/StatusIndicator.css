@@ -3,13 +3,15 @@
 
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid color-mix(in srgb, var(--tone) 40%, var(--border));
   border-radius: 999px;
-  padding: 6px 16px 6px 14px;
-  background: color-mix(in srgb, var(--tone) 8%, var(--bg));
+  max-width: 100%;
+  padding: 6px 11px;
+  background: color-mix(in srgb, var(--tone) 8%, var(--surface));
   color: var(--text);
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .status-indicator--success {
@@ -23,6 +25,7 @@
 .status-indicator-dot {
   width: 8px;
   height: 8px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--tone);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 25%, transparent);

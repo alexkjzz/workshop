@@ -5,7 +5,10 @@ import { SqliteReadingRepository } from '../infrastructure/persistence/sqlite-re
 import { startFakeCamera } from './fake-camera.js';
 import { presenceAt, telemetryAt, visitorAt } from './simulated-scene.js';
 
-const BROKER_URL = 'mqtt://127.0.0.1:1883';
+const BROKER_URL = process.env.MQTT_URL ?? 'mqtt://127.0.0.1:1883';
+const TELEMETRY_TOPIC = process.env.MQTT_TELEMETRY_TOPIC ?? 'esp8266/donnees';
+const VISION_TOPIC = process.env.MQTT_VISION_TOPIC ?? 'sentinel/vision';
+const COMMAND_TOPIC = process.env.MQTT_COMMAND_TOPIC ?? 'esp8266/led';
 const CAMERA_PORT = Number(process.env.SIMULATOR_CAMERA_PORT ?? 8090);
 const INTERVAL_MS = 2000;
 // History published at startup, with past timestamps, so the charts are full.
@@ -16,8 +19,8 @@ const camera = startFakeCamera(CAMERA_PORT);
 let interval: ReturnType<typeof setInterval> | undefined;
 
 function publishTelemetry(t: number, log: boolean) {
-  const telemetry = { ...telemetryAt(t), ts: Math.floor(t) };
-  client.publish('esp8266/donnees', JSON.stringify(telemetry), { qos: 1 }, (error) => {
+  const telemetry = { ...telemetryAt(t), ts: Math.floor(t), source: 'simulation' };
+  client.publish(TELEMETRY_TOPIC, JSON.stringify(telemetry), { qos: 1 }, (error) => {
     if (error) console.error('Publication simulee impossible :', error.message);
     else if (log) console.info('Mesure simulee :', JSON.stringify(telemetry));
   });
@@ -26,8 +29,8 @@ function publishTelemetry(t: number, log: boolean) {
 // Detections in the vision contract format (see infrastructure/messaging/messages.ts).
 function publishVision(t: number) {
   const faces = presenceAt(t) === null ? [] : [{ name: visitorAt(t), confidence: visitorAt(t) ? 0.91 : 0.64 }];
-  const detection = { ts: Math.floor(t), persons: faces.length, faces };
-  client.publish('sentinel/vision', JSON.stringify(detection), { qos: 1 });
+  const detection = { ts: Math.floor(t), persons: faces.length, faces, source: 'simulation' };
+  client.publish(VISION_TOPIC, JSON.stringify(detection), { qos: 1 });
 }
 
 // Only fills the gap since the last stored reading, so restarts add no duplicates.
@@ -56,7 +59,7 @@ function tick() {
 }
 
 client.on('connect', () => {
-  client.subscribe('esp8266/led', { qos: 1 }, (error, granted) => {
+  client.subscribe(COMMAND_TOPIC, { qos: 1 }, (error, granted) => {
     if (error || granted?.some((subscription) => subscription.qos === 128)) {
       console.error('Abonnement LED impossible.');
       client.end(true);
