@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Procédure de mise en production</title>
+<meta name="pdf-name" content="Sentinel-X_Procedure-mise-en-production.pdf">
+<link rel="stylesheet" href="style.css">
+<style>
+  .expect { margin: 1.2mm 0 0; color: var(--muted, #5b6575); font-size: 9pt; }
+  .expect strong { color: #17804a; }
+  table.check td:first-child { width: 7mm; text-align: center; }
+  .box { display: inline-block; width: 3.4mm; height: 3.4mm; border: 1.2px solid #8a95a8; border-radius: 0.8mm; vertical-align: middle; }
+  .phase { margin: 0 0 2mm; color: var(--muted, #5b6575); font-size: 9pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Procédure d'exploitation</div>
+  <h1 class="outline-title">Mise en production sur le serveur</h1>
+  <div class="cover-title" aria-hidden="true">Mise en production sur le serveur</div>
+  <p class="cover-subtitle">Les étapes à suivre, dans l'ordre, pour installer Sentinel-X sur le PC Serveur Local, le sécuriser, vérifier qu'il fonctionne et le remettre aux utilisateurs.</p>
+  <dl class="cover-meta">
+    <dt>Destinataire</dt><dd>Naouar — déploiement sur le serveur</dd>
+    <dt>Durée</dt><dd>1 h à 1 h 30, dont 20 à 40 min de construction automatique</dd>
+    <dt>Cible</dt><dd>Raspberry Pi 5 (Raspberry Pi OS 64 bits) ou PC Linux 64 bits (Debian 12, Ubuntu 22.04+)</dd>
+    <dt>Dépôt</dt><dd>https://github.com/alexkjzz/workshop.git — branche main</dd>
+    <dt>Version</dt><dd>Octobre 2026</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#avant">Avant de commencer<span>Informations et matériel à réunir</span></a></li>
+    <li><a href="#serveur">Préparer le serveur<span>Système à jour, Docker</span></a></li>
+    <li><a href="#durcir">Sécuriser le serveur<span>SSH par clé, pare-feu, mises à jour</span></a></li>
+    <li><a href="#code">Récupérer le code<span>Clone du dépôt</span></a></li>
+    <li><a href="#config">Configurer<span>Adresse du serveur, administrateur</span></a></li>
+    <li><a href="#lancer">Construire et démarrer<span>Une commande</span></a></li>
+    <li><a href="#verifier">Vérifier le déploiement<span>Contrôles techniques</span></a></li>
+    <li><a href="#acces">Ouvrir l'accès<span>Certificat, administrateur, comptes</span></a></li>
+    <li><a href="#materiel">Brancher le matériel<span>Boîtier ESP8266, webcam</span></a></li>
+    <li><a href="#sauvegarde">Sauvegarde initiale<span>Certificats et secrets</span></a></li>
+    <li><a href="#recette">Recette finale<span>Liste à cocher avant remise</span></a></li>
+    <li><a href="#incident">En cas de problème<span>Dépannage, retour arrière, escalade</span></a></li>
+  </ol>
+</section>
+
+<h2 id="avant" style="margin-top:0"><span class="num">1</span> Avant de commencer</h2>
+<p>Le déploiement est automatisé : certificats TLS, mots de passe et clés sont générés par la plateforme elle-même au premier démarrage. <strong>Vous n'avez aucun secret à saisir ni à recevoir.</strong> Réunissez seulement :</p>
+<table class="check">
+  <thead><tr><th></th><th>Élément</th><th>Pourquoi</th></tr></thead>
+  <tbody>
+    <tr><td><span class="box"></span></td><td>Un accès SSH au serveur avec un compte <code>sudo</code></td><td>Installation de Docker et du pare-feu</td></tr>
+    <tr><td><span class="box"></span></td><td>L'<strong>adresse IP fixe</strong> du serveur sur le réseau de la table (ex. <code>192.168.10.1</code>) et, si prévu, son nom DNS</td><td>Inscrite dans le certificat HTTPS ; les postes utiliseront cette adresse</td></tr>
+    <tr><td><span class="box"></span></td><td>Un accès Internet <strong>pendant l'installation</strong></td><td>Téléchargement de Docker, des images et des modèles IA. Ensuite, le serveur fonctionne hors ligne</td></tr>
+    <tr><td><span class="box"></span></td><td>10 Go d'espace disque libre, 4 Go de RAM minimum</td><td>L'image du service IA pèse environ 2,7 Go</td></tr>
+    <tr><td><span class="box"></span></td><td>Le boîtier ESP8266 déjà flashé, un câble USB <strong>de données</strong>, la webcam USB</td><td>Branchés à l'étape 9</td></tr>
+    <tr><td><span class="box"></span></td><td>L'adresse e-mail de l'administrateur et la liste des opérateurs à créer</td><td>Comptes du dashboard</td></tr>
+    <tr><td><span class="box"></span></td><td>Facultatif : un relais SMTP joignable depuis le serveur (hôte, port, identifiants)</td><td>Notifications par e-mail</td></tr>
+  </tbody>
+</table>
+<div class="note"><p>Dans ce document, remplacez <code>192.168.10.1</code> par l'adresse réelle du serveur. Les commandes sont à exécuter <strong>sur le serveur</strong>, dans le dossier <code>/opt/sentinel-x</code> à partir de l'étape 4.</p></div>
+
+<h2 id="serveur"><span class="num">2</span> Préparer le serveur</h2>
+<ol class="steps">
+  <li><strong>Mettre le système à jour</strong> :
+<pre><code>sudo apt update &amp;&amp; sudo apt full-upgrade -y
+sudo apt install -y git curl</code></pre></li>
+  <li><strong>Installer Docker</strong> (script officiel, inclut le plugin <code>docker compose</code>) :
+<pre><code>curl -fsSL https://get.docker.com | sh
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER</code></pre>
+  Déconnectez-vous puis reconnectez-vous en SSH pour que l'appartenance au groupe <code>docker</code> soit prise en compte.</li>
+  <li><strong>Contrôler</strong> l'installation :
+<pre><code>docker --version
+docker compose version
+docker run --rm hello-world</code></pre>
+  <p class="expect">Attendu : <strong>Docker 24 ou plus</strong>, <strong>Compose v2</strong>, et le message « Hello from Docker! ».</p></li>
+  <li><strong>Vérifier que les ports 80 et 443 sont libres</strong> :
+<pre><code>sudo ss -ltnp | grep -E ':(80|443) '</code></pre>
+  <p class="expect">Attendu : <strong>aucune ligne</strong>. Si un serveur web (Apache, nginx…) répond, arrêtez-le et désactivez-le (<code>sudo systemctl disable --now apache2</code>).</p></li>
+</ol>
+
+<h2 id="durcir"><span class="num">3</span> Sécuriser le serveur</h2>
+<p class="phase">À faire avant d'exposer le service. Gardez une session SSH ouverte pendant toute cette étape pour ne pas perdre l'accès.</p>
+<ol class="steps">
+  <li><strong>SSH par clé uniquement.</strong> Depuis votre poste : <code>ssh-copy-id utilisateur@192.168.10.1</code>, puis vérifiez dans un second terminal que la connexion par clé fonctionne. Ensuite, sur le serveur :
+<pre><code>sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/; s/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo systemctl restart ssh</code></pre></li>
+  <li><strong>Pare-feu</strong> : seuls SSH, HTTP (redirection) et HTTPS sont ouverts.
+<pre><code>sudo apt install -y ufw
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status verbose</code></pre></li>
+  <li><strong>Mises à jour de sécurité automatiques</strong> :
+<pre><code>sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades</code></pre></li>
+</ol>
+<div class="warn"><p>Les ports publiés par Docker contournent les règles UFW. La plateforme ne publie que 80 et 443 (et le broker MQTT sur <code>127.0.0.1</code> uniquement). <strong>Ne modifiez pas les ports publiés dans <code>docker-compose.yml</code></strong> sans accord de l'équipe de développement.</p></div>
+
+<h2 id="code"><span class="num">4</span> Récupérer le code</h2>
+<pre><code>sudo mkdir -p /opt/sentinel-x
+sudo chown $USER:$USER /opt/sentinel-x
+git clone https://github.com/alexkjzz/workshop.git /opt/sentinel-x
+cd /opt/sentinel-x
+git log --oneline -1</code></pre>
+<p class="expect">Attendu : le dernier commit de <code>main</code>. Notez son identifiant (7 caractères) dans la fiche de recette : il sert au retour arrière.</p>
+
+<h2 id="config"><span class="num">5</span> Configurer</h2>
+<p>Un seul fichier, <code>.env</code>, et uniquement des valeurs non secrètes. Partez du modèle :</p>
+<pre><code>cp .env.example .env
+chmod 600 .env
+nano .env</code></pre>
+<p>Modifiez au minimum :</p>
+<table>
+  <thead><tr><th>Variable</th><th>Valeur à mettre</th></tr></thead>
+  <tbody>
+    <tr><td><code>PUBLIC_HOSTS</code></td><td>L'IP du serveur et, s'il existe, son nom, séparés par des virgules : <code>192.168.10.1,sentinel-x.local</code>. <strong>Obligatoire</strong> pour accéder au dashboard depuis les autres postes.</td></tr>
+    <tr><td><code>ADMIN_EMAIL</code></td><td>L'e-mail du premier administrateur. Il n'a pas besoin d'exister : c'est l'identifiant de connexion.</td></tr>
+  </tbody>
+</table>
+<p>Facultatif : <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>MAIL_FROM</code> pour les notifications par e-mail. Laissez les autres valeurs par défaut.</p>
+<div class="danger"><p>N'ajoutez <strong>aucun</strong> mot de passe, clé ou certificat dans <code>.env</code> en dehors de <code>SMTP_PASSWORD</code> : ils sont générés automatiquement. Ne commitez jamais <code>.env</code> (il est ignoré par git).</p></div>
+
+<h2 id="lancer"><span class="num">6</span> Construire et démarrer</h2>
+<pre><code>docker compose up -d --build</code></pre>
+<p>La première construction dure 20 à 40 minutes sur un Raspberry Pi 5 (surtout l'image IA). Les suivantes ne prennent que quelques secondes. Si la construction s'interrompt sur une erreur réseau (« Read timed out »), relancez simplement la même commande : les téléchargements déjà faits sont en cache.</p>
+<p>Au premier lancement, le service <code>init</code> crée l'autorité de certification locale, un certificat par service et tous les secrets, puis s'arrête. Suivez-le :</p>
+<pre><code>docker compose logs init</code></pre>
+<p class="expect">Attendu : <strong>« PKI et secrets prets. »</strong> puis la ligne « Premier demarrage : compte administrateur … ».</p>
+
+<h2 id="verifier"><span class="num">7</span> Vérifier le déploiement</h2>
+<ol class="steps">
+  <li><strong>État des services</strong> (attendez une minute après le démarrage) :
+<pre><code>docker compose ps -a</code></pre>
+  <table>
+    <thead><tr><th>Service</th><th>État attendu</th></tr></thead>
+    <tbody>
+      <tr><td><code>init</code></td><td><span class="pill info">Exited (0)</span> — normal, il ne tourne qu'au démarrage</td></tr>
+      <tr><td><code>frontend</code>, <code>backend</code>, <code>ai</code></td><td><span class="pill ok">Up (healthy)</span></td></tr>
+      <tr><td><code>mosquitto</code>, <code>bridge</code></td><td><span class="pill ok">Up</span></td></tr>
+    </tbody>
+  </table></li>
+  <li><strong>Redirection HTTP vers HTTPS</strong> :
+<pre><code>curl -sI http://192.168.10.1/ | grep -iE "^HTTP|^location"</code></pre>
+  <p class="expect">Attendu : <strong>301 Moved Permanently</strong> et <code>Location: https://192.168.10.1:443/</code>.</p></li>
+  <li><strong>Certificat HTTPS valide</strong> pour l'adresse du serveur :
+<pre><code>curl -s --cacert deploy/runtime/sentinel-x-ca.crt https://192.168.10.1/api/health</code></pre>
+  <p class="expect">Attendu : <strong>{"status":"ok"}</strong>. Une erreur « certificate » signifie que l'adresse n'est pas dans <code>PUBLIC_HOSTS</code> (étape 5).</p></li>
+  <li><strong>API protégée</strong> :
+<pre><code>curl -s -o /dev/null -w "%{http_code}\n" --cacert deploy/runtime/sentinel-x-ca.crt https://192.168.10.1/api/readings</code></pre>
+  <p class="expect">Attendu : <strong>401</strong> (accès refusé sans connexion).</p></li>
+  <li><strong>Services internes non exposés</strong> :
+<pre><code>sudo ss -ltnp | grep -E ':(3001|8001|8883) '</code></pre>
+  <p class="expect">Attendu : <strong>uniquement</strong> <code>127.0.0.1:8883</code> (broker en local). Ni 3001 ni 8001.</p></li>
+  <li><strong>Aucune erreur dans les journaux</strong> :
+<pre><code>docker compose logs backend ai mosquitto | grep -iE "error|fatal"</code></pre>
+  <p class="expect">Attendu : <strong>aucune ligne</strong>. Un avertissement joblib « Read-only file system » est normal.</p></li>
+</ol>
+
+<h2 id="acces"><span class="num">8</span> Ouvrir l'accès</h2>
+<h3>8.1 Distribuer le certificat de l'autorité</h3>
+<p>Le fichier <code>/opt/sentinel-x/deploy/runtime/sentinel-x-ca.crt</code> doit être installé sur chaque poste qui ouvrira le dashboard ; sinon, le navigateur affiche un avertissement. Récupérez-le depuis votre poste :</p>
+<pre><code>scp utilisateur@192.168.10.1:/opt/sentinel-x/deploy/runtime/sentinel-x-ca.crt .</code></pre>
+<table>
+  <thead><tr><th>Système</th><th>Installation</th></tr></thead>
+  <tbody>
+    <tr><td>Windows</td><td>Double-clic → Installer le certificat → Ordinateur local → « Autorités de certification racines de confiance »</td></tr>
+    <tr><td>macOS</td><td>Double-clic → Trousseau Système → ouvrir le certificat → Se fier : « Toujours approuver »</td></tr>
+    <tr><td>Linux (Chrome)</td><td>Paramètres → Confidentialité et sécurité → Gérer les certificats → Autorités → Importer</td></tr>
+    <tr><td>Firefox</td><td>Paramètres → Vie privée et sécurité → Certificats → Autorités → Importer</td></tr>
+  </tbody>
+</table>
+<div class="note"><p>Ce fichier est <strong>public</strong> : il peut être envoyé par e-mail ou clé USB. La clé privée de l'autorité reste dans le volume Docker du serveur et n'est jamais à transmettre.</p></div>
+
+<h3>8.2 Première connexion administrateur</h3>
+<pre><code>docker compose exec backend cat /run/sentinel/secrets/initial-admin-password</code></pre>
+<p>Ouvrez <code>https://192.168.10.1</code> depuis un poste équipé du certificat, connectez-vous avec <code>ADMIN_EMAIL</code> et ce mot de passe. Enregistrez immédiatement le mot de passe dans le gestionnaire de mots de passe de l'équipe ; ne l'envoyez pas en clair par messagerie.</p>
+
+<h3>8.3 Créer les comptes des opérateurs</h3>
+<p>Un compte nominatif par personne (les actions sont journalisées avec l'e-mail de leur auteur) :</p>
+<pre><code>docker compose exec backend node dist/cli/create-user.js prenom.nom@aethercorp.fr "Prénom Nom"</code></pre>
+<p>Le mot de passe (12 caractères minimum) est demandé deux fois, sans affichage. Transmettez-le à la personne par un canal séparé de son identifiant.</p>
+
+<h2 id="materiel"><span class="num">9</span> Brancher le matériel</h2>
+<p>Le matériel se branche à chaud, sans configuration.</p>
+<ol class="steps">
+  <li><strong>Boîtier ESP8266</strong> : branchez-le en USB avec un câble de données, puis :
+<pre><code>ls /dev/ttyUSB* /dev/ttyACM* 2&gt;/dev/null
+docker compose logs -f bridge</code></pre>
+  <p class="expect">Attendu : un périphérique <code>/dev/ttyUSB0</code> (ou <code>ttyACM0</code>), puis dans les logs <strong>« MQTTS connecte »</strong>, <strong>« Port /dev/ttyUSB0 ouvert »</strong> et des lignes « MQTT #… ». Quittez avec <kbd>Ctrl+C</kbd>. Les mesures apparaissent sur la page Metrics du dashboard.</p></li>
+  <li><strong>Webcam</strong> : branchez-la, vérifiez <code>ls /dev/video*</code>, puis dans le dashboard, page Caméra, cliquez sur <strong>Démarrer la webcam</strong>. Si plusieurs caméras sont détectées et que la mauvaise s'affiche, mettez <code>VISION_CAMERA_INDEX=1</code> (ou 2…) dans <code>.env</code> puis <code>docker compose up -d</code>.</li>
+</ol>
+
+<h2 id="sauvegarde"><span class="num">10</span> Sauvegarde initiale</h2>
+<p>Sauvegardez l'autorité de certification et les secrets dès maintenant : sans eux, une réinstallation obligerait à redistribuer un nouveau certificat sur tous les postes.</p>
+<pre><code>cd /opt/sentinel-x
+docker compose stop
+docker run --rm -v sentinel-x_pki:/pki:ro -v sentinel-x_secrets:/secrets:ro \
+  -v "$PWD":/backup alpine tar czf /backup/sentinel-x-pki-secrets.tgz /pki /secrets
+docker compose start
+gpg -c sentinel-x-pki-secrets.tgz &amp;&amp; shred -u sentinel-x-pki-secrets.tgz</code></pre>
+<p>Stockez <code>sentinel-x-pki-secrets.tgz.gpg</code> <strong>hors du serveur</strong> (coffre de l'équipe) et la phrase de passe GPG séparément. Les données métier (volume <code>sentinel-x_backend-data</code>) se sauvegardent de la même façon, à fréquence régulière.</p>
+
+<h2 id="recette"><span class="num">11</span> Recette finale</h2>
+<p>À cocher avant de remettre la plateforme aux utilisateurs. Joignez la fiche complétée au ticket de mise en production.</p>
+<table class="check">
+  <thead><tr><th></th><th>Contrôle</th><th>Résultat attendu</th></tr></thead>
+  <tbody>
+    <tr><td><span class="box"></span></td><td>Commit déployé : <code>_______</code></td><td>Noté (étape 4)</td></tr>
+    <tr><td><span class="box"></span></td><td>SSH par mot de passe désactivé, UFW actif</td><td><code>ufw status</code> : 22, 80, 443 seulement</td></tr>
+    <tr><td><span class="box"></span></td><td><code>docker compose ps -a</code></td><td>init Exited (0), 3 services healthy, 2 Up</td></tr>
+    <tr><td><span class="box"></span></td><td>http://IP redirige vers https://IP</td><td>301</td></tr>
+    <tr><td><span class="box"></span></td><td>Dashboard depuis un poste avec le certificat</td><td>Cadenas sans avertissement</td></tr>
+    <tr><td><span class="box"></span></td><td>API sans connexion</td><td>401</td></tr>
+    <tr><td><span class="box"></span></td><td>Ports 3001 et 8001 fermés sur l'hôte</td><td>Absents de <code>ss -ltnp</code></td></tr>
+    <tr><td><span class="box"></span></td><td>Connexion administrateur</td><td>Réussie, mot de passe stocké dans le coffre</td></tr>
+    <tr><td><span class="box"></span></td><td>Comptes opérateurs créés</td><td>Chaque opérateur se connecte</td></tr>
+    <tr><td><span class="box"></span></td><td>Boîtier ESP8266 branché</td><td>Mesures en temps réel sur Metrics, indicateur MQTT vert</td></tr>
+    <tr><td><span class="box"></span></td><td>Commande LED depuis le dashboard</td><td>La LED du boîtier réagit</td></tr>
+    <tr><td><span class="box"></span></td><td>Webcam</td><td>Flux et détections sur la page Caméra</td></tr>
+    <tr><td><span class="box"></span></td><td>Redémarrage du serveur (<code>sudo reboot</code>)</td><td>Tout revient seul, mêmes contrôles OK</td></tr>
+    <tr><td><span class="box"></span></td><td>Sauvegarde chiffrée PKI + secrets</td><td>Stockée hors du serveur</td></tr>
+    <tr><td><span class="box"></span></td><td>Facultatif : e-mail de test depuis Paramètres</td><td>E-mail reçu</td></tr>
+  </tbody>
+</table>
+
+<h2 id="incident"><span class="num">12</span> En cas de problème</h2>
+<h3>Dépannage rapide</h3>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>Avertissement de certificat dans le navigateur</td><td>Certificat de l'autorité non installé, ou adresse absente de <code>PUBLIC_HOSTS</code></td><td>Installer <code>sentinel-x-ca.crt</code> ; corriger <code>.env</code> puis <code>docker compose up -d</code> (le certificat est régénéré)</td></tr>
+    <tr><td>Erreur 403 à la connexion depuis un poste</td><td>Adresse utilisée non déclarée</td><td>L'ajouter à <code>PUBLIC_HOSTS</code>, puis <code>docker compose up -d</code></td></tr>
+    <tr><td><code>bind: address already in use</code></td><td>Port 80 ou 443 occupé</td><td>Voir étape 2.4</td></tr>
+    <tr><td>Un service reste <em>unhealthy</em> ou redémarre en boucle</td><td>Voir son journal</td><td><code>docker compose logs --tail 100 &lt;service&gt;</code></td></tr>
+    <tr><td><code>bridge</code> : « 0 ports USB plausibles »</td><td>Boîtier non branché ou câble de charge seule</td><td>Changer de câble, vérifier <code>ls /dev/ttyUSB*</code></td></tr>
+    <tr><td>Webcam introuvable</td><td>Caméra absente ou mauvais index</td><td><code>ls /dev/video*</code>, ajuster <code>VISION_CAMERA_INDEX</code></td></tr>
+    <tr><td>Mot de passe administrateur perdu</td><td>—</td><td>Le relire avec la commande de l'étape 8.2</td></tr>
+  </tbody>
+</table>
+
+<h3>Retour arrière</h3>
+<p>Les données, comptes, certificats et secrets sont dans des volumes Docker : changer de version du code ne les efface pas.</p>
+<pre><code>cd /opt/sentinel-x
+git checkout &lt;commit-précédent&gt;
+docker compose up -d --build</code></pre>
+<div class="danger"><p>N'utilisez jamais <code>docker compose down -v</code> ni <code>docker volume rm</code> en production : l'option <code>-v</code> supprime définitivement les données, les comptes, l'autorité de certification et les secrets.</p></div>
+
+<h3>Mises à jour ultérieures</h3>
+<pre><code>cd /opt/sentinel-x
+git checkout main      # revient sur la branche après un retour arrière
+git pull
+docker compose up -d --build
+docker compose ps -a</code></pre>
+
+<h3>Escalade vers l'équipe de développement</h3>
+<p>Transmettez l'étape en échec, le commit déployé et ce rapport (il ne contient aucun secret) :</p>
+<pre><code>{ git log --oneline -1; docker compose ps -a; docker compose logs --tail 200; } &gt; rapport-incident.txt 2&gt;&amp;1</code></pre>
+<p>N'envoyez jamais le contenu de <code>/run/sentinel/secrets</code>, ni le fichier <code>.env</code> s'il contient un mot de passe SMTP.</p>
+
+</body>
+</html>
