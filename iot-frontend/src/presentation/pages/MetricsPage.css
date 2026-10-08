@@ -1,100 +1,203 @@
 .dashboard {
-  width: min(100% - 32px, 760px);
-  margin: auto;
-  padding: 40px 0 56px;
+  width: min(100% - 48px, var(--content-width));
+  min-width: 0;
+  margin: 0 auto;
+  padding: 36px 0 56px;
 }
 
-.page-header {
-  margin-bottom: 32px;
-  text-align: center;
+.dashboard .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.dashboard .page-header .page-intro {
+  min-width: 0;
+  margin: 0;
+}
+
+.dashboard-connection {
+  flex-shrink: 0;
 }
 
 .dashboard h2 {
   margin: 0;
   color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.readings > .section-heading {
+  margin-bottom: 16px;
 }
 
 .reading-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 32px;
+  gap: 20px;
   margin: 0;
 }
 
 .reading {
   min-width: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 18px 0 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .reading dt {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .reading dd {
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   color: var(--text);
-  font-size: 20px;
-  font-weight: 600;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
+.reading dd.reading-value--empty {
+  color: var(--text-muted);
+  font-size: 24px;
+  letter-spacing: -0.025em;
+}
+
+.reading-history-label {
+  margin: 20px 0 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reading .history {
+  max-height: 180px;
+  margin: 0;
+}
+
+.reading .history th:last-child,
+.reading .history td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .commands {
-  margin-top: 32px;
-  text-align: center;
+  min-width: 0;
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.command-note {
+  max-width: 760px;
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .command-buttons {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
 .command-buttons button {
-  min-width: 120px;
-  min-height: 42px;
+  min-width: 112px;
+  min-height: 44px;
   border: 1px solid var(--button-bg);
-  padding: 8px 16px;
+  border-radius: 10px;
+  padding: 10px 20px;
   color: var(--button-text);
   background: var(--button-bg);
   font: inherit;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.command-buttons button + button {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface);
 }
 
 .command-buttons button:hover:not(:disabled) {
-  color: var(--button-bg);
-  background: var(--bg);
+  border-color: var(--accent);
+  color: var(--button-text);
+  background: color-mix(in srgb, var(--button-bg) 88%, var(--text));
+}
+
+.command-buttons button + button:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .command-buttons button:focus-visible {
-  outline: 2px solid var(--border-strong);
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
 
 .command-buttons button:disabled {
-  color: var(--disabled-text);
-  border-color: var(--disabled-border);
-  background: var(--disabled-bg);
+  border-color: var(--border);
+  color: var(--text-muted);
+  background: var(--surface-raised);
   cursor: not-allowed;
 }
 
-.message {
-  min-height: 1.5em;
-  margin-top: 12px;
+.dashboard .message {
+  margin: 14px 0 0;
   color: var(--text-soft);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.dashboard .message:empty {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .dashboard .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
 }
 
 @media (max-width: 640px) {
   .dashboard {
-    padding: 28px 0;
+    width: calc(100% - 32px);
+    padding: 26px 0 40px;
   }
 
   .reading-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .reading,
+  .commands {
+    padding: 18px;
+  }
+
+  .dashboard-connection {
+    max-width: 100%;
   }
 }

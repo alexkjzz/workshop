@@ -1,0 +1,3 @@
+# USB-to-MQTT bridge only; the AI environment already includes paho-mqtt.
+pyserial>=3.5,<4
+paho-mqtt>=2.1,<3

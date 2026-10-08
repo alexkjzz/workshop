@@ -8,4 +8,5 @@ export interface VisionDetection {
   detectedAt: Date;
   persons: number;
   faces: Face[];
+  source?: 'live' | 'simulation';
 }

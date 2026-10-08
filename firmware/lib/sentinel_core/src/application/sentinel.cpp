@@ -1,76 +1,155 @@
 #include "application/sentinel.h"
 
-#include "domain/command.h"
-
-Sentinel::Sentinel(Sensors &sensors, Actuators &actuators, TelemetryLink &link, StatusDisplay &display,
-                   const Clock &clock, Logger &logger, GasFailsafe &failsafe,
-                   const SentinelSettings &settings)
-    : sensors_(sensors),
-      actuators_(actuators),
-      link_(link),
-      display_(display),
-      clock_(clock),
-      logger_(logger),
-      failsafe_(failsafe),
-      settings_(settings) {}
+#include <Arduino.h>
+#include "sentinel_config.h"
 
 void Sentinel::begin(uint32_t nowMs) {
-  // Force un premier echantillon et un premier affichage au premier tick.
-  lastSampleAt_ = nowMs - settings_.sampleIntervalMs;
-  lastDisplayAt_ = nowMs - settings_.displayIntervalMs;
-  lastPublishAt_ = nowMs;
+  readings_ = Readings{};
+  status_ = DeviceStatus{};
+  startTime_ = nowMs;
+  // Let the sensor settle before its first measurement, including after reset.
+  lastDHTRead_ = nowMs;
+  lastGasRead_ = nowMs - GAS_INTERVAL_MS;
+  lastDisplay_ = nowMs - DISPLAY_INTERVAL_MS;
+  lastSerial_ = nowMs - SERIAL_INTERVAL_MS;
+  updateOutputs();
+
+  Serial.println(F("Systeme initialise"));
 }
 
 void Sentinel::tick(uint32_t nowMs) {
-  if (nowMs - lastSampleAt_ >= settings_.sampleIntervalMs) {
-    lastSampleAt_ = nowMs;
-    sensors_.sample(readings_);
-    const bool wasActive = failsafe_.active();
-    alarm_.setFailsafe(failsafe_.update(readings_.gas, nowMs));
-    if (failsafe_.active() != wasActive) {
-      logger_.info(failsafe_.active() ? "[ALARME] fail-safe gaz declenche" : "[ALARME] fail-safe gaz leve");
-    }
+  const uint32_t elapsed = nowMs - startTime_;
+
+  // Warmup happens once per begin(), even after millis() wraps (~49.7 days).
+  status_.pirReady = status_.pirReady || elapsed >= PIR_WARMUP_MS;
+  status_.gasReady = status_.gasReady || elapsed >= GAS_WARMUP_MS;
+  status_.systemReady = status_.pirReady && status_.gasReady;
+
+  updatePIR();
+
+  if (nowMs - lastGasRead_ >= GAS_INTERVAL_MS) {
+    lastGasRead_ = nowMs;
+    updateGas();
   }
 
-  // Un changement du PIR est publie immediatement pour une alerte reactive.
-  const bool presence = sensors_.readPresence();
-  const bool presenceChanged = presence != readings_.presence;
-  readings_.presence = presence;
-  if (presenceChanged || nowMs - lastPublishAt_ >= settings_.publishIntervalMs) {
-    lastPublishAt_ = nowMs;
-    publish();
+  if (nowMs - lastDHTRead_ >= DHT_INTERVAL_MS) {
+    lastDHTRead_ = nowMs;
+    updateDHT();
   }
 
-  if (link_.state() == LinkState::Online) replayBuffer();
+  updateOutputs();
 
-  actuators_.apply(alarm_.outputs(nowMs, link_.state() == LinkState::Online));
+  if (nowMs - lastDisplay_ >= DISPLAY_INTERVAL_MS) {
+    lastDisplay_ = nowMs;
+    display_.render(readings_, status_);
+  }
 
-  if (nowMs - lastDisplayAt_ >= settings_.displayIntervalMs) {
-    lastDisplayAt_ = nowMs;
-    display_.render(readings_, link_.state(), alarm_.active());
+  if (nowMs - lastSerial_ >= SERIAL_INTERVAL_MS) {
+    lastSerial_ = nowMs;
+    printSerialStatus();
   }
 }
 
-bool Sentinel::handleCommand(const char *payload, size_t length) {
-  if (alarm_.apply(parseCommand(payload, length))) return true;
-  logger_.info("[CMD] commande inconnue");
-  return false;
-}
+void Sentinel::updatePIR() {
+  const bool previousMotion = status_.motionDetected;
 
-void Sentinel::publish() {
-  Sample sample;
-  sample.timestamp = clock_.epochSeconds();
-  sample.readings = readings_;
-  if (link_.state() == LinkState::Online && link_.publish(sample)) return;
-  // Sans horloge, une mesure rejouee plus tard serait datee a sa reception : inutile.
-  if (sample.timestamp != 0) buffer_.push(sample);
-}
-
-// Rejoue progressivement les mesures prises hors ligne, de la plus ancienne a la plus recente.
-void Sentinel::replayBuffer() {
-  for (uint8_t i = 0; i < settings_.replayBatch && !buffer_.empty(); i++) {
-    if (!link_.publish(buffer_.front())) return;
-    buffer_.pop();
-    if (buffer_.empty()) logger_.info("[MQTT] tampon hors ligne vide");
+  if (!status_.pirReady) {
+    status_.motionDetected = false;
+    readings_.presence = false;
+    return;
   }
+
+  status_.motionDetected = sensors_.readPresence();
+  readings_.presence = status_.motionDetected;
+
+  if (status_.motionDetected && !previousMotion) {
+    Serial.println();
+    Serial.println(F(">>> MOUVEMENT DETECTE <<<"));
+  }
+
+  if (!status_.motionDetected && previousMotion) {
+    Serial.println();
+    Serial.println(F("PIR : retour NORMAL"));
+  }
+}
+
+void Sentinel::updateGas() {
+  readings_.gas = sensors_.readGas();
+
+  if (!status_.gasReady) {
+    status_.gasAlert = false;
+    return;
+  }
+
+  if (!status_.gasAlert && readings_.gas >= GAS_THRESHOLD_ON) {
+    status_.gasAlert = true;
+    Serial.println();
+    Serial.println(F("!!! ALERTE GAZ !!!"));
+  } else if (status_.gasAlert && readings_.gas <= GAS_THRESHOLD_OFF) {
+    status_.gasAlert = false;
+    Serial.println();
+    Serial.println(F("Gaz revenu a la normale"));
+  }
+}
+
+void Sentinel::updateDHT() {
+  sensors_.sampleClimate(readings_);
+}
+
+void Sentinel::updateOutputs() {
+  // Priorite identique au code original : rouge, puis orange, puis verte.
+  status_.alarmActive = status_.gasAlert || status_.motionDetected;
+  status_.warningActive = !status_.alarmActive && (!status_.systemReady || !readings_.climateValid);
+  const bool systemOK = status_.systemReady && readings_.climateValid && !status_.alarmActive;
+
+  ActuatorOutputs outputs;
+  outputs.red = status_.alarmActive;
+  outputs.orange = status_.warningActive;
+  outputs.green = systemOK;
+  outputs.buzzer = status_.alarmActive;
+  actuators_.apply(outputs);
+}
+
+void Sentinel::printSerialStatus() {
+  Serial.println();
+  Serial.println(F("========= SENTINEL-X ========="));
+
+  Serial.print(F("Temperature : "));
+  if (readings_.climateValid) {
+    Serial.print(readings_.temperature, 1);
+    Serial.println(F(" C"));
+  } else {
+    Serial.println(F("ERREUR"));
+  }
+
+  Serial.print(F("Humidite    : "));
+  if (readings_.climateValid) {
+    Serial.print(readings_.humidity, 1);
+    Serial.println(F(" %"));
+  } else {
+    Serial.println(F("ERREUR"));
+  }
+
+  Serial.print(F("Gaz MQ-2    : "));
+  Serial.println(readings_.gas);
+
+  Serial.print(F("Etat gaz    : "));
+  if (!status_.gasReady) Serial.println(F("CHAUFFE"));
+  else if (status_.gasAlert) Serial.println(F("DANGER"));
+  else Serial.println(F("NORMAL"));
+
+  Serial.print(F("Etat PIR    : "));
+  if (!status_.pirReady) Serial.println(F("CALIBRATION"));
+  else if (status_.motionDetected) Serial.println(F("MOUVEMENT"));
+  else Serial.println(F("NORMAL"));
+
+  Serial.print(F("ALARME      : "));
+  Serial.println(status_.alarmActive ? F("ACTIVE") : F("OFF"));
+  Serial.print(F("LED ROUGE   : "));
+  Serial.println(status_.alarmActive ? F("ON") : F("OFF"));
+  Serial.print(F("LED ORANGE  : "));
+  Serial.println(status_.warningActive ? F("ON") : F("OFF"));
+  Serial.print(F("LED VERTE   : "));
+  Serial.println(status_.systemReady && readings_.climateValid && !status_.alarmActive ? F("ON") : F("OFF"));
+  Serial.println(F("=============================="));
 }

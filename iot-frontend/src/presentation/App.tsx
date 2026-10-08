@@ -17,14 +17,26 @@ interface AuthenticatedAppProps {
 function AuthenticatedApp({ userName, onSignOut, onSessionExpired }: AuthenticatedAppProps) {
   const route = useRoute()
   const deviceStatus = useDeviceStatus(onSessionExpired)
-  const { readings, detections } = useLiveData(onSessionExpired)
+  const { readings, detections, aiPredictions, aiStatus, aiLoadError, refreshAi } = useLiveData(onSessionExpired)
 
   return (
     <>
       <Topbar route={route} userName={userName} onSignOut={onSignOut} />
-      {route === 'camera' && <CameraPage detections={detections} />}
+      {route === 'camera' && (
+        <CameraPage detections={detections} aiPredictions={aiPredictions} aiStatus={aiStatus} refreshAi={refreshAi} onSessionExpired={onSessionExpired} />
+      )}
       {route === 'settings' && <SettingsPage onSessionExpired={onSessionExpired} />}
-      {route === 'metrics' && <MetricsPage {...deviceStatus} readings={readings} />}
+      {route === 'metrics' && (
+        <MetricsPage
+          {...deviceStatus}
+          readings={readings}
+          aiPredictions={aiPredictions}
+          aiStatus={aiStatus}
+          aiLoadError={aiLoadError}
+          refreshAi={refreshAi}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
     </>
   )
 }

@@ -1,8 +1,148 @@
-# Workshop IoT
+# Sentinel-X
+
+Plateforme locale de monitoring IoT avec dashboard **React/Vite**, backend
+**Express/TypeScript** et service IA **FastAPI/Python**. Le firmware ESP8266
+actuel transmet les mesures DHT22, MQ-2 et PIR par **USB** ; une passerelle
+Python les publie sur MQTT pour Express, SQLite et le dashboard en temps reel.
+
+Fonctionnalites : historique des capteurs, etats du boitier et des LEDs,
+authentification, notifications, detection de personnes **YOLOv8 + ByteTrack**,
+reconnaissance faciale locale **YuNet + SFace**, **Sensor Fusion** et **Risk
+Engine**. **Isolation Forest doit etre entraine sur vos mesures normales** :
+aucun modele de production entraine n'est fourni.
+
+Prerequis : Node.js >= 22.13, Python 3.12 x64 pour l'IA et la passerelle,
+Mosquitto pour MQTT, et PlatformIO pour compiler le firmware. Les procedures
+d'installation sont ci-dessous ; [le guide GitHub](docs/GITHUB.md) explique
+comment partager le projet sans les donnees et secrets locaux.
+
+## Sentinel-X : intelligence artificielle et Windows
+
+Le service Python local se trouve dans [`ai/`](ai/README.md) : Isolation Forest,
+features temporelles, YOLO/OpenCV, fusion capteurs et moteur de risque. Il utilise
+le backend MQTT/SQLite, le flux SSE existant et le relais MJPEG authentifie.
+
+Pour Windows, executer depuis la racine :
+
+```powershell
+.\scripts\setup-windows.ps1
+```
+
+Les commandes de lancement dans trois terminaux, l'entrainement reel ou de
+demonstration et les tests sont dans [ai/README.md](ai/README.md).
+Le script ne demarre aucune simulation. Les scripts Bash ci-dessous restent le
+mode de test historique avec donnees fictives.
+
+Architecture et limites : [docs/AI_IMPLEMENTATION.md](docs/AI_IMPLEMENTATION.md).
+Inventaire des fichiers : [docs/AI_FILES.md](docs/AI_FILES.md).
+
+## Donnees ESP reelles par USB
+
+Le firmware actuel envoie temperature, humidite, gaz, presence et etats du
+boitier sur le port serie USB. La passerelle les transmet au MQTT existant :
+**ESP USB -> passerelle Python -> MQTT -> Express -> SQLite/SSE -> React**.
+Le navigateur continue a communiquer uniquement avec Express.
+
+Depuis la racine, avec le broker, le backend et le frontend demarres :
+
+```powershell
+.\ai\.venv\Scripts\python.exe -m pip install -r .\scripts\requirements-esp.txt
+.\ai\.venv\Scripts\python.exe .\scripts\esp_serial_bridge.py
+```
+
+Fermer `platformio device monitor` avant de lancer la passerelle : un seul
+programme peut ouvrir le port USB. Sans `--port`, la passerelle selectionne
+l'unique port USB plausible a chaque reconnexion. Si plusieurs cartes sont
+branchees, utiliser `--list-ports` puis `--port COMx`. Le dashboard affiche les quatre capteurs et
+un panneau **Etat du boitier ESP** (gaz/PIR, DHT, alarme et LEDs). La chauffe et
+la calibration ne sont pas interpretees comme des mesures valides.
+
+Installation complete, configuration et test : [docs/esp-serial.md](docs/esp-serial.md).
+Controle du DHT, qualite des mesures et validation de l'analyse :
+[validation capteurs et IA](docs/VALIDATION_CAPTEURS_IA.md).
 
 Dashboard React et API Express pour recevoir les mesures d'un ESP8266 via MQTT
 et envoyer des commandes LED. Les tests locaux peuvent se faire sans carte,
 avec Mosquitto pour simuler les messages.
+
+## Face Recognition
+
+La webcam utilise **YOLO + ByteTrack** pour les personnes et le suivi, puis un
+module séparé **OpenCV YuNet + SFace** pour détecter et identifier les visages.
+Le navigateur utilise les routes Express authentifiées ; Express appelle FastAPI.
+Aucune nouvelle dépendance Python lourde : les modèles ONNX utilisent OpenCV déjà installé.
+Pillow, déjà fourni avec YOLO, figure explicitement dans `requirements-vision.txt`
+pour valider et normaliser les photos envoyées.
+
+Installation des modèles officiels (une fois, environ 39 Mo, SHA-256 vérifié),
+dans un terminal PowerShell ouvert à la racine du dépôt :
+
+```powershell
+Set-Location .\ai
+.\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
+.\.venv\Scripts\python.exe -m app.vision.setup_faces
+```
+
+Dans **Caméra → Reconnaissance faciale → Ajouter une personne**, saisir le nom,
+sélectionner **1 à 5 photos** puis cliquer **Enregistrer la personne**. Utiliser
+des photos JPEG, PNG ou WebP avec un seul visage net et suffisamment grand :
+**3 à 5 photos par personne** sont recommandées. Limites : **5 Mio par photo**,
+**15 Mio par envoi**, **4096 pixels par côté** et **16 mégapixels**.
+
+Les photos passent uniquement par Express authentifié
+(`POST /api/ai/vision/faces/enroll`), puis FastAPI (`POST /vision/faces/enroll`).
+Le service ajoute les références à l'identité existante sans écraser ses photos
+et recharge automatiquement le catalogue. La caméra peut être arrêtée pendant
+l'ajout ; le modèle facial doit être disponible. Les refus sont expliqués photo
+par photo, même si une partie de l'envoi réussit ; les photos refusées restent
+sélectionnées pour correction. Les fichiers acceptés deviennent des JPEG nommés
+par UUID, avec orientation corrigée et métadonnées EXIF supprimées.
+
+L'ajout manuel reste possible dans des sous-dossiers portant le nom de la personne :
+
+```text
+ai/known_faces/Mohamed/photo1.jpg
+ai/known_faces/Mohamed/photo2.jpg
+ai/known_faces/Mohamed/photo3.jpg
+ai/known_faces/Personne2/photo1.jpg
+```
+
+Le catalogue est chargé au démarrage de Python. Après ajout manuel/suppression de photos,
+cliquer **Recharger les visages connus** dans la page Caméra. Aucun redémarrage
+n'est nécessaire pour recharger les références. Les images sans visage, trop
+petites, illisibles ou contenant plusieurs visages sont ignorées et journalisées.
+Sans référence, le compteur indique 0 identité connue et les visages restent Inconnu.
+
+Variables dans `ai/.env` :
+
+```dotenv
+FACE_RECOGNITION_ENABLED=true
+FACE_RECOGNITION_THRESHOLD=0.55
+FACE_RECOGNITION_EVERY_N_FRAMES=3
+FACE_RECOGNITION_MAX_FPS=2
+FACE_KNOWN_DIR=known_faces
+FACE_EVENT_COOLDOWN_SECONDS=5
+FACE_MIN_SIZE_PIXELS=40
+FACE_DETECTOR_MODEL=models/face_detection_yunet_2023mar.onnx
+FACE_EMBEDDING_MODEL=models/face_recognition_sface_2021dec.onnx
+```
+
+L'envoi de photos conserve `FACE_KNOWN_DIR` et n'ajoute aucune variable `.env`.
+Après mise à jour du code, relancer Python et Express s'ils exécutent encore
+l'ancienne version ; les ajouts suivants ne demandent aucun redémarrage.
+
+Après les builds frontend/backend, `node scripts/check-face-enrollment.mjs`
+vérifie le formulaire et le relais HTTP avec des photos synthétiques et un modèle
+facial factice, dans des processus et dossiers isolés. Ce test n'ouvre pas la
+webcam et n'évalue pas la précision biométrique.
+
+La confiance affichée est une similarité cosinus, pas une probabilité d'identité.
+Le seuil doit être évalué sur vos propres photos et conditions de caméra ; un
+score de 90–95 % n'est pas garanti. Fonction de démonstration/monitoring, à ne
+pas utiliser comme unique mécanisme de sécurité critique.
+
+Commandes de démarrage, API, procédure de test, résultats de validation et liste
+des fichiers modifiés : [docs/FACE_RECOGNITION.md](docs/FACE_RECOGNITION.md).
 
 ## Installation
 
@@ -36,32 +176,34 @@ gestionnaire de paquets du systeme avant de lancer `bash install.sh`.
 
 - `iot-backend/` : API Express, MQTT, historique SQLite, voir [iot-backend/README.md](iot-backend/README.md).
 - `iot-frontend/` : application React/Vite (pages Metriques et Camera), voir [iot-frontend/README.md](iot-frontend/README.md).
-- `firmware/` : firmware ESP8266 (PlatformIO, MQTTS), voir [firmware/README.md](firmware/README.md).
+- `firmware/` : firmware ESP8266 actuel (PlatformIO, capteurs/OLED et sortie serie USB).
+- `firmware-old/` : ancienne version reseau ; le flux USB actuel ne l'utilise pas.
+- `scripts/esp_serial_bridge.py` : passerelle des mesures serie vers le backend MQTT.
 - `install.sh`, `run.sh`, `stop.sh` : installation, demarrage et arret.
 - `docker-compose.yml` : stack web conteneurisee (voir [Docker](#docker)).
 
 ## Architecture
 
-Les trois projets suivent la clean architecture : les regles metier ne
-dependent d'aucun framework, et les dependances pointent toujours vers le
-centre.
+Les projets web suivent une architecture en couches ; le firmware USB separe
+les capteurs, les sorties et l'affichage dans `lib/sentinel_core/src/`.
 
 | Couche | Role | Backend | Frontend | Firmware |
 | --- | --- | --- | --- | --- |
-| Domaine | entites et regles pures | `src/domain` | `src/domain` | `lib/sentinel_core/src/domain` |
+| Domaine | entites et regles pures | `src/domain` | `src/domain` | structures dans `application/ports.h` |
 | Application | cas d'usage et ports (interfaces) | `src/application` | `src/application` | `lib/sentinel_core/src/application` |
-| Infrastructure | adaptateurs techniques | `src/infrastructure` (SQLite, MQTT, Better Auth, camera) | `src/infrastructure` (fetch, SSE, Better Auth, localStorage) | `src/infrastructure` (capteurs, GPIO, MQTTS, OLED, NTP) |
+| Infrastructure | adaptateurs techniques | `src/infrastructure` (SQLite, MQTT, Better Auth, camera) | `src/infrastructure` (fetch, SSE, Better Auth, localStorage) | `lib/sentinel_core/src/infrastructure` (capteurs, GPIO, OLED) |
 | Presentation | interface utilisateur / HTTP | `src/presentation/http` (Express) | `src/presentation` (React) | ecran OLED (adaptateur) |
 | Composition | assemble les implementations | `src/main.ts` | `src/main.tsx` | `src/main.cpp` |
 
-Le domaine et l'application se testent sans broker, sans base, sans
-navigateur ni carte : faux adaptateurs en memoire cote serveur, `pio test -e
-native` cote firmware.
+Le domaine et l'application web se testent sans broker, sans base persistante,
+sans navigateur ni carte, avec de faux adaptateurs en memoire cote serveur.
+Le parseur serie se teste egalement sans ESP.
 
 ```
-ESP8266 --MQTTS--> Mosquitto --MQTT--> backend --SQLite--> historique
-                                          |  \--REST + SSE--> dashboard (Metriques)
-script vision IA --MJPEG + MQTT--------->/   \--relais camera--> dashboard (Camera)
+ESP8266 --USB--> passerelle serie --MQTT--> Mosquitto --> Express --> SQLite
+                                                        |  \--REST/SSE--> React
+                                                        |--HTTP--> FastAPI
+Webcam serveur --> OpenCV / YOLO / ByteTrack / YuNet / SFace --> MJPEG via Express
 ```
 
 ## Demarrage Et Arret
@@ -166,15 +308,20 @@ La reponse de `/api/status` doit contenir `mqttConnected: true`, un
 `lastMessageAt` renseigne et les valeurs dans `telemetry`. Chaque mesure est
 enregistree dans `iot-backend/data/telemetry.db` (SQLite) et conservee 7 jours
 (`READINGS_RETENTION_DAYS`). Les champs sont optionnels ; les mesures doivent
-etre des nombres finis et `presence` un booleen. Un champ `ts` (epoch en
-secondes) date la mesure : le firmware l'envoie pour les mesures rejouees apres
-une coupure.
+etre des nombres finis et `presence` un booleen. Le champ `ts` (epoch en
+secondes) est ajoute par la passerelle a la reception USB. Elle ne rejoue
+aucun historique apres une coupure. `/api/status` et les notifications
+decrivent les donnees physiques ; les simulations restent dans l'historique
+et le flux SSE pour la demonstration.
 
 ## Camera Et Reconnaissance Faciale
 
-La page Camera affiche le flux du script vision de l'equipe IA, relaye par le
-backend derriere l'authentification, et l'historique des detections. Contrat a
-respecter par ce script :
+La page Camera demarre la webcam du PC serveur via Express et FastAPI. YOLO et
+ByteTrack detectent et suivent les personnes ; YuNet/SFace identifie les visages
+a partir du catalogue local. Le MJPEG et les metadonnees transitent par Express.
+Voir [Face Recognition](docs/FACE_RECOGNITION.md) pour l'installation et les photos.
+
+Un ancien service vision externe reste compatible avec ce contrat :
 
 - Flux video MJPEG (`multipart/x-mixed-replace`) annote, sur l'URL definie par
   `VISION_STREAM_URL` (ex. `http://192.168.10.1:8000/stream.mjpg`).
@@ -188,8 +335,9 @@ respecter par ce script :
   `name` vaut `null` pour un visage inconnu (signale en alerte sur la page),
   `confidence` est compris entre 0 et 1, `ts` et `persons` sont optionnels.
 
-En mode test local, le simulateur publie des detections fictives ; sans
-`VISION_STREAM_URL`, la page indique que le flux est indisponible.
+En mode test local, le simulateur publie des detections fictives. Hors simulation,
+si `VISION_STREAM_URL` est omis, Express utilise le flux du service IA configure
+par `AI_SERVICE_URL` ; une valeur `VISION_STREAM_URL` vide desactive le flux.
 
 ## Tester Les Commandes LED
 
@@ -215,6 +363,11 @@ Cela confirme la publication, pas l'execution physique par une carte.
 
 ## Verifications Automatiques
 
+Le workflow [GitHub Actions](.github/workflows/ci.yml) verifie le backend,
+le frontend, l'IA et la compilation du firmware a chaque push et pull request.
+Les tests utilisent des adaptateurs de test et ne demandent ni secrets, ni
+webcam, ni ESP physique. Les modeles telecharges restent hors du depot.
+
 ```sh
 npm --prefix iot-backend test
 npm --prefix iot-backend run typecheck
@@ -222,12 +375,18 @@ npm --prefix iot-backend run build
 npm --prefix iot-frontend test
 npm --prefix iot-frontend run lint
 npm --prefix iot-frontend run build
-(cd firmware && pio test -e native)
+(cd firmware && pio run)
+python firmware/tests/run_native.py
+python -m unittest discover -s scripts/tests -v
+(cd ai && python -m pytest -q)
+python scripts/check-repository.py
 ```
 
 Les tests couvrent les regles du domaine, les cas d'usage (avec de faux
-adaptateurs), le parsing des messages MQTT, le depot SQLite et le coeur du
-firmware ; ils ne necessitent ni broker ni carte. Les commandes de publication
+adaptateurs), le parsing des messages MQTT, le depot SQLite et la passerelle USB ;
+ils ne necessitent ni broker ni carte. Le runner C++ utilise g++, clang++ ou Zig
+pour tester le firmware avec des doubles materiels ; `pio run` compile pour
+l'ESP8266 sans flasher la carte. Les commandes de publication
 et d'abonnement ci-dessus servent aux tests manuels d'integration.
 
 ## Notifications Par E-mail
@@ -280,15 +439,15 @@ docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.te
 
 ## Avec Un Vrai ESP8266
 
-Le broker lance par le script est reserve aux connexions locales. Pour une carte,
-arreter le mode test avec `bash stop.sh` pour ne plus publier de mesures fictives,
-puis lancer le backend et le frontend manuellement avec `npm run dev` dans leurs
-dossiers respectifs. Ensuite,
-configurer un listener Mosquitto accessible sur le reseau local, autoriser le
-port `1883` dans le pare-feu et utiliser l'adresse IP du Mac dans le firmware
-(pas `127.0.0.1`). La carte et le Mac doivent etre sur le meme reseau.
-Prevoir une authentification et des ACL avant d'exposer le broker ; ne pas
-ouvrir un broker anonyme sur Internet.
+Le firmware courant utilise USB : suivre [le guide de la passerelle](docs/esp-serial.md).
+Le broker reste local ; aucun acces Wi-Fi de la carte au broker n'est necessaire.
+Arreter le simulateur avant de recevoir les mesures reelles pour ne pas melanger
+leurs origines. Les LEDs et le buzzer sont commandes localement par le firmware ;
+les boutons LED du dashboard necessitent un firmware MQTT compatible.
+
+`firmware-old/` conserve l'ancienne variante reseau. Son utilisation demande
+une configuration Wi-Fi, un broker accessible, ses certificats et identifiants ;
+elle n'est pas utilisee par la passerelle USB actuelle.
 
 La configuration du backend par variables d'environnement est detaillee dans
 [iot-backend/README.md](iot-backend/README.md). Pour personnaliser les ports ou

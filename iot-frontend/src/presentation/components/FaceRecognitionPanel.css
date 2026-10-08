@@ -1,0 +1,66 @@
+.face-catalog { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--text-muted); font-size: 12px; }
+.face-catalog p { margin: 0; line-height: 1.7; }
+.face-catalog strong { color: var(--text); font-weight: 700; }
+.face-catalog button,
+.face-photo-selection button { min-height: 44px; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: 9px; color: var(--text); background: var(--surface); font-size: 12px; font-weight: 550; cursor: pointer; }
+.face-catalog button:hover:not(:disabled),
+.face-photo-selection button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.face-catalog button:disabled,
+.face-enrollment button:disabled { opacity: .5; cursor: not-allowed; }
+
+.face-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; margin-top: 16px; }
+.face-cards:empty { display: none; }
+.face-recognition-card { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); }
+.face-recognition-card h3 { margin: 0 0 10px; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.face-recognition-card p { margin: 10px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.face-known,
+.face-unknown { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 650; }
+.face-known { color: var(--success); background: color-mix(in srgb, var(--success) 10%, var(--surface)); }
+.face-unknown { color: var(--warning); background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
+
+.face-enrollment { margin-top: 22px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); }
+.face-enrollment-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.face-enrollment h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 650; }
+.face-enrollment-heading > span { color: var(--text-muted); font-size: 11px; font-weight: 550; }
+.face-enrollment fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.face-enrollment fieldset:disabled .face-upload-control { opacity: .55; cursor: not-allowed; }
+.face-enrollment-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); align-items: start; gap: 16px; margin-top: 18px; }
+.face-enrollment label { display: grid; gap: 8px; color: var(--text); font-size: 12px; font-weight: 550; }
+.face-enrollment input { min-width: 0; width: 100%; box-sizing: border-box; }
+.face-enrollment input[type="text"] { min-height: 44px; padding: 11px 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 9px; font-size: 13px; }
+.face-upload-control { position: relative; display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: 9px; color: var(--accent); background: var(--surface); cursor: pointer; }
+.face-upload-control:hover { border-color: var(--accent); background: var(--accent-soft); }
+.face-upload-control:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+.face-upload-control > svg { flex-shrink: 0; }
+.face-upload-label { display: grid; gap: 4px; color: var(--text); font-size: 12px; font-weight: 600; }
+.face-upload-label > span { color: var(--text-muted); font-size: 11px; font-weight: 450; }
+.face-upload-control input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.face-upload-limits { margin: 8px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.7; }
+.face-enrollment #face-name-help { font-size: 11px; }
+.face-enroll-submit { width: 100%; min-height: 44px; margin-top: 18px; padding: 11px 16px; border: 1px solid var(--button-bg); border-radius: 9px; color: var(--button-text); background: var(--button-bg); font-size: 12px; font-weight: 650; cursor: pointer; }
+.face-enroll-submit:hover:not(:disabled) { color: var(--button-text); background: color-mix(in srgb, var(--button-bg) 88%, var(--text)); }
+
+.face-photo-selection { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.face-photo-selection li { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.face-photo-selection img { width: 48px; height: 48px; flex-shrink: 0; object-fit: cover; border-radius: 7px; }
+.face-photo-selection li > div { flex: 1; min-width: 0; }
+.face-photo-selection .camera-ai-summary { font-size: 11px; }
+.face-photo-selection .camera-ai-error { padding: 5px 7px; font-size: 11px; }
+.face-photo-selection button { flex-shrink: 0; min-height: 44px; padding: 7px 9px; font-size: 11px; }
+.face-photo-name { display: block; overflow-wrap: anywhere; color: var(--text); font-size: 11px; font-weight: 550; }
+.face-selection-summary { margin: 12px 0 0; color: var(--text-muted); font-size: 11px; }
+
+.face-enrollment-feedback { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--surface); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.face-enrollment-feedback p { margin: 0; }
+.face-enrollment-feedback p + p { margin-top: 8px; }
+.face-enrollment-feedback ul { margin: 8px 0 0; padding-left: 18px; }
+.face-enrollment-feedback[role="alert"] { border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); }
+@media (max-width: 600px) {
+  .face-enrollment { padding: 14px; }
+  .face-catalog { align-items: stretch; }
+  .face-catalog button { width: 100%; }
+  .face-enrollment-inputs { grid-template-columns: minmax(0, 1fr); }
+  .face-upload-limits,
+  .face-enrollment #face-name-help,
+  .face-photo-selection .camera-ai-summary { font-size: 12px; }
+}

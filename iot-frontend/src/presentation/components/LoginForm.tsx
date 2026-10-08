@@ -32,8 +32,15 @@ export function LoginForm({ onSignIn }: LoginFormProps) {
 
   return (
     <main className="login">
-      <h1>SENTINEL-X</h1>
-      <p className="login-subtitle">Centre de commandement — accès restreint</p>
+      <div className="login-emblem" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z" />
+          <path d="M8 12l3 3 5-6" />
+        </svg>
+      </div>
+      <p className="page-eyebrow">Votre espace Sentinel-X</p>
+      <h1>Connexion</h1>
+      <p className="login-subtitle">Accédez à vos capteurs, vos caméras et vos alertes.</p>
       <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
         <label>
           Adresse e-mail

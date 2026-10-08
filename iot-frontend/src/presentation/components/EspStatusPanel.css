@@ -1,0 +1,88 @@
+.esp-status {
+  min-width: 0;
+  margin-bottom: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.esp-status-message {
+  margin: 14px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--text-soft);
+  background: var(--surface-raised);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.esp-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.esp-status-grid > div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--surface-raised);
+}
+
+.esp-status-grid dt {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.esp-status-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.esp-status-grid .status-indicator {
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.esp-status-grid .status-indicator-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+}
+
+@media (max-width: 960px) {
+  .esp-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .esp-status {
+    padding: 18px;
+  }
+
+  .esp-status-grid {
+    gap: 10px;
+  }
+
+  .esp-status-grid > div {
+    padding: 12px;
+  }
+}

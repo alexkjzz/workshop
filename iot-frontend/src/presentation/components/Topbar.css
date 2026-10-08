@@ -3,107 +3,61 @@
   top: 0;
   z-index: 10;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .topbar-inner {
   display: flex;
   align-items: center;
-  gap: 32px;
-  width: min(100% - 32px, 760px);
-  height: 56px;
+  gap: 36px;
+  width: min(100% - 48px, var(--content-width));
+  min-height: 76px;
   margin: auto;
 }
 
-.topbar-brand {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
+.topbar-brand { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--text); text-decoration: none; flex-shrink: 0; }
+.topbar-emblem { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; color: var(--accent); background: var(--accent-soft); }
+.topbar-wordmark { display: block; font-size: 16px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
+.topbar-wordmark b { color: var(--accent); }
+.topbar-tagline { display: block; margin-top: 1px; color: var(--text-muted); font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
 
-.topbar-nav {
-  display: flex;
-  align-self: stretch;
-  gap: 24px;
-}
-
+.topbar-nav { display: flex; align-items: center; gap: 6px; }
 .topbar-nav a {
   display: flex;
   align-items: center;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 10px 14px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
 }
+.topbar-nav a:hover { color: var(--text); background: var(--surface-raised); }
+.topbar-nav a[aria-current='page'] { color: var(--accent); background: var(--accent-soft); font-weight: 650; }
+.topbar-nav svg { flex-shrink: 0; }
 
-.topbar-nav a:hover {
-  color: var(--text);
-}
+.topbar-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; min-width: 0; }
+.topbar-user { max-width: 140px; overflow: hidden; color: var(--text-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; font-size: 12px; }
+.topbar-theme { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
+.topbar a:focus-visible, .topbar button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
-.topbar-nav a[aria-current='page'] {
-  border-bottom-color: var(--border-strong);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-left: auto;
-  font-size: 13px;
-}
-
-.topbar-user {
-  color: var(--text-muted);
-}
-
-.topbar-link {
-  border: none;
-  padding: 0;
-  color: var(--text);
-  background: none;
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.topbar-theme {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  padding: 0;
-  color: var(--text);
-  background: none;
-  cursor: pointer;
-}
-
-.topbar-theme:hover {
-  border-color: var(--border-strong);
-}
-
-.topbar a:focus-visible,
-.topbar button:focus-visible {
-  outline: 2px solid var(--border-strong);
-  outline-offset: 2px;
+@media (max-width: 1000px) {
+  .topbar-inner { gap: 20px; }
+  .topbar-user { display: none; }
+  .topbar-tagline { display: none; }
+  .topbar-link span { display: none; }
+  .topbar-link { width: 44px; height: 44px; padding: 0; }
 }
 
 @media (max-width: 640px) {
-  .topbar-inner {
-    gap: 20px;
-  }
-
-  .topbar-user {
-    display: none;
-  }
-}
-
-@media (max-width: 440px) {
-  .topbar-brand {
-    display: none;
-  }
+  .topbar-inner { flex-wrap: wrap; justify-content: space-between; gap: 12px; width: calc(100% - 32px); padding: 12px 0 10px; }
+  .topbar-wordmark { font-size: 14px; }
+  .topbar-emblem { width: 34px; height: 34px; }
+  .topbar-actions { gap: 8px; }
+  .topbar-nav { order: 3; width: 100%; gap: 6px; }
+  .topbar-nav a { flex: 1; min-width: 0; padding: 10px 8px; font-size: 12px; gap: 6px; }
 }

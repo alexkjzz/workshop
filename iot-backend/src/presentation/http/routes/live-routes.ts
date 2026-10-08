@@ -5,7 +5,9 @@ import { currentSession } from '../middleware/require-session.js';
 const HEARTBEAT_MS = 15_000;
 
 function serialize(event: LiveEvent) {
-  const data = event.type === 'reading' ? event.reading : event.detection;
+  const data = event.type === 'reading' ? event.reading
+    : event.type === 'vision' ? event.detection
+    : event.type === 'ai' ? event.prediction : event.status;
   return `event: ${event.type}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 

@@ -1,4 +1,4 @@
-import { UnauthorizedError } from '../application/errors';
+import { UnauthorizedError } from '../application/errors.ts';
 
 // JSON request to the same-origin API; the session cookie follows.
 export async function requestJson<T>(path: string, init?: RequestInit, fallbackError = 'Erreur de connexion.'): Promise<T> {
