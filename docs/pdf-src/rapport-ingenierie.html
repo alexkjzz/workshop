@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Rapport d'ingénierie technique</title>
+<meta name="pdf-name" content="Workshop2026-M1-GX-Dossier.pdf">
+<link rel="stylesheet" href="style.css">
+<style>
+  .todo { background: #fff4d6; border-bottom: 1px dashed #c98a00; padding: 0 1mm; }
+  .st { font-weight: 700; white-space: nowrap; }
+  .st.ok { color: #17804a; } .st.part { color: #b26a00; } .st.ko { color: #b42c2c; }
+  table.compact td, table.compact th { padding-top: 1.4mm; padding-bottom: 1.4mm; }
+  .wiring svg text { font-family: inherit; }
+  @page poster { size: A3 portrait; margin: 0; }
+  .poster { page: poster; break-before: page; width: 297mm; height: 420mm; box-sizing: border-box; padding: 16mm 16mm 22mm;
+    background: linear-gradient(165deg, #0f1c33 0%, #17305c 50%, #1f4fae 100%); color: #fff; display: flex; flex-direction: column; gap: 7mm; overflow: hidden; }
+  .poster h2, .poster h3 { color: #fff; border: 0; margin: 0; padding: 0; }
+  .poster .p-head { display: flex; justify-content: space-between; align-items: flex-end; }
+  .poster .p-title { font-size: 46pt; font-weight: 800; letter-spacing: -0.5pt; line-height: 1; }
+  .poster .p-tag { font-size: 15pt; color: #a9c2ff; margin-top: 3mm; }
+  .poster .p-kind { font-size: 10pt; letter-spacing: 2pt; color: #a9c2ff; text-transform: uppercase; }
+  .poster .p-card { background: rgba(255,255,255,0.96); color: #142033; border-radius: 4mm; padding: 6mm 7mm; }
+  .poster .p-card h3 { color: #1f4fae; font-size: 14pt; margin-bottom: 2.5mm; }
+  .poster .p-card p, .poster .p-card li { font-size: 10.5pt; line-height: 1.45; margin: 0 0 1.4mm; }
+  .poster .p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .poster .p-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5mm; }
+  .poster .p-num { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); border-radius: 3mm; padding: 4mm 5mm; }
+  .poster .p-num b { display: block; font-size: 24pt; line-height: 1.1; }
+  .poster .p-num span { font-size: 9.5pt; color: #dbe6ff; }
+  .poster .p-shot { height: 66mm; overflow: hidden; border-radius: 2mm; border: 1px solid #d5dbe6; background: #fff; }
+  .poster .p-shot img { width: 100%; display: block; }
+  .poster .p-foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 10pt; color: #dbe6ff; }
+  .poster ul { padding-left: 5mm; margin: 0; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Workshop2026-M1-G<span class="todo" style="color:#142033">n</span> · Dossier technique</div>
+  <h1 class="outline-title">Rapport d'ingénierie technique</h1>
+  <div class="cover-title" aria-hidden="true">Rapport d'ingénierie technique</div>
+  <p class="cover-subtitle">Boîtier de surveillance autonome Sentinel-X et son Centre de Commandement Tactique : schémas réseau et électronique, matrice de sécurité, documentation de l'IA, rapport d'audit et poster A3.</p>
+  <dl class="cover-meta">
+    <dt>Consortium</dt><dd>Naouar, Mohammed, Thibault, Alexis — AetherCorp Industrial Solutions</dd>
+    <dt>Variante</dt><dd>Option technique A — PC Serveur Local sur Raspberry Pi 5</dd>
+    <dt>Formation</dt><dd>EPSI — Mastère 1<sup>re</sup> année, Workshop national Bac+4</dd>
+    <dt>Code</dt><dd>https://github.com/alexkjzz/workshop</dd>
+    <dt>Date</dt><dd>Octobre 2026</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#synthese">Synthèse<span>Le produit, la variante, l'état de conformité</span></a></li>
+    <li><a href="#equipe">Consortium<span>Répartition des rôles</span></a></li>
+    <li><a href="#reseau">Schéma réseau<span>Topologie, adressage, matrice des flux</span></a></li>
+    <li><a href="#cablage">Schéma de câblage électronique<span>ESP8266, capteurs, alertes</span></a></li>
+    <li><a href="#logiciel">Architecture logicielle<span>Firmware, passerelle, API, dashboard</span></a></li>
+    <li><a href="#ia">Documentation de l'IA<span>Vision, maintenance prédictive, fusion</span></a></li>
+    <li><a href="#securite">Matrice de sécurité<span>TLS, hardening, secrets</span></a></li>
+    <li><a href="#audit">Rapport d'audit<span>Auto-audit et pentest croisé</span></a></li>
+    <li><a href="#conformite">Conformité au cahier des charges<span>Écarts et plan d'action</span></a></li>
+    <li><a href="#qualite">Qualité et exploitation<span>Tests, déploiement, MCO</span></a></li>
+    <li><a href="#poster">Annexe — Poster A3<span>Page au format A3</span></a></li>
+  </ol>
+</section>
+
+<h2 id="synthese" style="margin-top:0"><span class="num">1</span> Synthèse</h2>
+<p>Sentinel-X est un boîtier de surveillance autonome destiné aux micro-centrales d'AetherCorp. Il détecte trois familles de menaces : <strong>environnementales</strong> (gaz, température, humidité), <strong>intrusions physiques</strong> (mouvement, présence humaine à la webcam) et <strong>cyberattaques</strong>, contre lesquelles la chaîne logicielle est chiffrée et durcie.</p>
+<ul>
+  <li><strong>Edge Node</strong> : un ESP8266 NodeMCU lit un DHT22, un MQ-2 et un PIR HC-SR501, affiche son état sur un écran OLED et déclenche localement LEDs et buzzer.</li>
+  <li><strong>PC Serveur Local</strong> (Option A, Raspberry Pi 5) : la stack Docker Compose regroupe broker Mosquitto, API Node.js, dashboard React et service IA Python. La webcam USB y est branchée directement.</li>
+  <li><strong>IA locale</strong> : détection de personnes YOLOv8n avec suivi ByteTrack, reconnaissance faciale YuNet/SFace et détection d'anomalies par Isolation Forest sur les séries temporelles des capteurs.</li>
+  <li><strong>Sécurité</strong> : TLS 1.2/1.3 sur chaque liaison réseau, autorité de certification et secrets générés au premier démarrage, MQTT authentifié avec ACL, conteneurs non-root en lecture seule, et durcissement de l'hôte (SSH par clé, UFW).</li>
+</ul>
+<div class="warn"><p><strong>Deux écarts majeurs</strong> sont détaillés en section 9. La liaison ESP8266 → serveur passe par <strong>USB série et non en Wi-Fi MQTTS</strong>, alors que le chiffrement de ce lien est obligatoire. Les commandes d'actionneurs du dashboard <strong>n'atteignent pas le boîtier</strong>. Une version MQTTS du firmware avec réception des commandes existe dans l'historique Git (commit <code>d83e871</code>).</p></div>
+
+<h2 id="equipe"><span class="num">2</span> Consortium</h2>
+<table>
+  <thead><tr><th>Membre</th><th>Responsabilités</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Naouar</strong></td><td>Mise en production, cybersécurité et réseau : installation et configuration du Raspberry Pi, déploiement de l'infrastructure</td></tr>
+    <tr><td><strong>Mohammed</strong></td><td>Assemblage des composants électroniques (avec Thibault), IA de reconnaissance faciale</td></tr>
+    <tr><td><strong>Thibault</strong></td><td>Backend, montage et design du boîtier, management du projet</td></tr>
+    <tr><td><strong>Alexis</strong></td><td>Organisation, frontend (dashboard de supervision)</td></tr>
+  </tbody>
+</table>
+
+<h2 id="reseau"><span class="num">3</span> Schéma réseau</h2>
+<figure class="diagram">
+<svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#17804a"/></marker></defs>
+  <rect x="180" y="8" width="572" height="314" rx="12" fill="#f4f6fa" stroke="#c9d1de" stroke-dasharray="5 4"/>
+  <text x="192" y="26" font-size="10" fill="#5b6575" font-weight="700">Raspberry Pi 5 — PC Serveur Local (Option A)</text>
+  <rect x="370" y="36" width="370" height="92" rx="10" fill="#fff" stroke="#9fb7ee"/>
+  <text x="382" y="52" font-size="9.5" fill="#1f4fae" font-weight="700">Docker edge 172.30.10.0/24</text>
+  <rect x="370" y="148" width="370" height="112" rx="10" fill="#fff" stroke="#c98a8a"/>
+  <text x="382" y="238" font-size="9.5" fill="#b42c2c" font-weight="700">Docker core 172.30.20.0/24</text><text x="382" y="251" font-size="9" fill="#b42c2c">interne, sans Internet</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="40" width="130" height="60" rx="8" fill="#fff" stroke="#c9d1de"/><text x="75" y="64" font-weight="700" fill="#142033">Postes superviseurs</text><text x="75" y="80" font-size="9" fill="#5b6575">navigateur, client Wi-Fi</text>
+    <rect x="10" y="135" width="130" height="46" rx="8" fill="#fff" stroke="#c9d1de"/><text x="75" y="155" font-weight="700" fill="#142033">Webcam USB</text><text x="75" y="170" font-size="9" fill="#5b6575">/dev/video*</text>
+    <rect x="10" y="215" width="130" height="56" rx="8" fill="#fff" stroke="#c9d1de"/><text x="75" y="238" font-weight="700" fill="#142033">Boîtier ESP8266</text><text x="75" y="254" font-size="9" fill="#5b6575">USB série 115200 bauds</text>
+    <rect x="196" y="40" width="150" height="70" rx="8" fill="#fff" stroke="#1f4fae"/><text x="271" y="60" font-weight="700" fill="#142033">wlan0 — AP Wi-Fi</text><text x="271" y="76" font-size="9" fill="#5b6575">192.168.10.1/24</text><text x="271" y="91" font-size="9" fill="#5b6575">UFW : 22, 80, 443</text>
+    <rect x="196" y="150" width="150" height="52" rx="8" fill="#fff" stroke="#c9d1de" stroke-dasharray="4 3"/><text x="271" y="172" font-weight="700" fill="#142033">init</text><text x="271" y="188" font-size="9" fill="#5b6575">CA, certificats, secrets</text>
+    <rect x="390" y="62" width="100" height="48" rx="7" fill="#2b62d9"/><text x="440" y="83" font-weight="700" fill="#fff">nginx</text><text x="440" y="99" font-size="8.5" fill="#dbe6ff">8080 → 8443 TLS</text>
+    <rect x="520" y="62" width="100" height="48" rx="7" fill="#2b62d9"/><text x="570" y="83" font-weight="700" fill="#fff">backend</text><text x="570" y="99" font-size="8.5" fill="#dbe6ff">HTTPS 3001</text>
+    <rect x="390" y="170" width="95" height="48" rx="7" fill="#2b62d9"/><text x="437" y="191" font-weight="700" fill="#fff">mosquitto</text><text x="437" y="207" font-size="8.5" fill="#dbe6ff">MQTTS 8883</text>
+    <rect x="510" y="170" width="95" height="48" rx="7" fill="#2b62d9"/><text x="557" y="191" font-weight="700" fill="#fff">ai</text><text x="557" y="207" font-size="8.5" fill="#dbe6ff">HTTPS 8001</text>
+    <rect x="630" y="170" width="95" height="48" rx="7" fill="#2b62d9"/><text x="677" y="191" font-weight="700" fill="#fff">bridge</text><text x="677" y="207" font-size="8.5" fill="#dbe6ff">série → MQTTS</text>
+  </g>
+  <g stroke="#17804a" stroke-width="1.8" fill="none" marker-end="url(#a1)">
+    <line x1="140" y1="70" x2="194" y2="70"/>
+    <line x1="346" y1="80" x2="388" y2="84"/>
+    <line x1="490" y1="86" x2="518" y2="86"/>
+    <polyline points="545,110 545,140 437,140 437,168"/>
+    <polyline points="590,110 590,150 557,150 557,168"/>
+    <polyline points="677,170 677,158 470,158 470,168"/>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.6" fill="none" stroke-dasharray="5 3" marker-end="url(#a1)">
+    <polyline points="140,158 160,158 160,290 585,290 585,220"/>
+    <polyline points="140,243 170,243 170,306 705,306 705,220"/>
+  </g>
+  <g font-size="8.8" fill="#17804a" font-weight="700">
+    <text x="144" y="64">WPA2</text>
+    <text x="348" y="72">HTTPS</text>
+    <text x="442" y="135">MQTTS + compte + ACL</text>
+    <text x="596" y="145">HTTPS + jeton</text>
+    <text x="300" y="286" fill="#5b6575">USB (non réseau)</text>
+    <text x="300" y="319" fill="#5b6575">USB série (non chiffré, accès physique)</text>
+  </g>
+</svg>
+<figcaption><strong>Figure 1.</strong> Topologie de table. Liens verts : chiffrés et authentifiés. Liens gris en pointillé : USB local, hors réseau.</figcaption>
+</figure>
+
+<h3>3.1 Plan d'adressage</h3>
+<table class="compact">
+  <thead><tr><th>Segment</th><th>Plage</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td>Wi-Fi de table (AP sur <code>wlan0</code>)</td><td><span class="todo">192.168.10.0/24</span>, passerelle <span class="todo">192.168.10.1</span>, DHCP <span class="todo">.100–.199</span></td><td>Postes superviseurs ; réseau isolé des autres tables, sans routage vers l'extérieur</td></tr>
+    <tr><td>Docker <code>edge</code></td><td>172.30.10.0/24</td><td>nginx et backend ; seul segment relié aux ports publiés</td></tr>
+    <tr><td>Docker <code>core</code></td><td>172.30.20.0/24, <code>internal</code></td><td>Broker, IA, passerelle USB, et backend comme client ; aucune sortie Internet</td></tr>
+    <tr><td>Docker <code>mqtt-host</code></td><td>172.30.30.0/24</td><td>Publication du broker sur <code>127.0.0.1:8883</code> uniquement</td></tr>
+  </tbody>
+</table>
+<p style="font-size:9pt;color:#5b6575">Les valeurs surlignées suivent le plan proposé par le sujet. Elles sont à confirmer par Naouar d'après la configuration réelle du point d'accès (SSID, WPA2/WPA3, plage DHCP).</p>
+
+<h3>3.2 Matrice des flux</h3>
+<table class="compact">
+  <thead><tr><th>Source → destination</th><th>Port</th><th>Protocole</th><th>Authentification</th></tr></thead>
+  <tbody>
+    <tr><td>Poste → nginx</td><td>80</td><td>HTTP, redirection 301 uniquement</td><td>—</td></tr>
+    <tr><td>Poste → nginx</td><td>443</td><td>HTTPS TLS 1.2/1.3, HSTS</td><td>Session Better Auth</td></tr>
+    <tr><td>Administrateur → hôte</td><td>22</td><td>SSH</td><td>Clé asymétrique uniquement</td></tr>
+    <tr><td>nginx → backend</td><td>3001</td><td>HTTPS, certificat vérifié</td><td>IP client de confiance limitée à nginx</td></tr>
+    <tr><td>backend → mosquitto</td><td>8883</td><td>MQTTS</td><td>Compte <code>backend</code> + ACL</td></tr>
+    <tr><td>bridge → mosquitto</td><td>8883</td><td>MQTTS</td><td>Compte <code>bridge</code> + ACL</td></tr>
+    <tr><td>backend → ai</td><td>8001</td><td>HTTPS, certificat vérifié</td><td>Jeton Bearer</td></tr>
+    <tr><td>backend → relais SMTP</td><td>587/465</td><td>STARTTLS exigé ou TLS</td><td>Compte SMTP (facultatif)</td></tr>
+    <tr><td>ESP8266 → bridge</td><td>USB</td><td>Série 115200 bauds</td><td>Accès physique</td></tr>
+  </tbody>
+</table>
+
+<h2 id="cablage"><span class="num">4</span> Schéma de câblage électronique</h2>
+<figure class="diagram wiring">
+<svg viewBox="0 0 760 410" xmlns="http://www.w3.org/2000/svg">
+  <rect x="300" y="40" width="160" height="340" rx="10" fill="#142033"/>
+  <text x="380" y="64" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">NodeMCU</text>
+  <text x="380" y="79" font-size="10" fill="#a9c2ff" text-anchor="middle">ESP8266 (ESP-12)</text>
+  <rect x="352" y="356" width="56" height="24" rx="3" fill="#5b6575"/><text x="380" y="372" font-size="9" fill="#fff" text-anchor="middle">micro-USB</text>
+  <g font-size="9.5" fill="#dbe6ff">
+    <text x="310" y="104">D1 · GPIO5</text><text x="310" y="134">D2 · GPIO4</text>
+    <text x="310" y="234">D0 · GPIO16</text><text x="310" y="274">D4 · GPIO2</text><text x="310" y="314">D8 · GPIO15</text>
+    <text x="450" y="104" text-anchor="end">GPIO14 · D5</text><text x="450" y="174" text-anchor="end">ADC0 · A0</text>
+    <text x="450" y="274" text-anchor="end">GPIO12 · D6</text><text x="450" y="344" text-anchor="end">GPIO13 · D7</text>
+  </g>
+  <g fill="#fff" stroke="#142033" stroke-width="1">
+    <rect x="30" y="72" width="180" height="80" rx="8"/><rect x="30" y="214" width="180" height="34" rx="6"/><rect x="30" y="254" width="180" height="34" rx="6"/><rect x="30" y="294" width="180" height="34" rx="6"/>
+    <rect x="550" y="72" width="185" height="58" rx="8"/><rect x="550" y="144" width="185" height="58" rx="8"/><rect x="550" y="244" width="185" height="58" rx="8"/><rect x="550" y="318" width="185" height="48" rx="8"/>
+  </g>
+  <g font-size="10.5" fill="#142033">
+    <text x="42" y="92" font-weight="700">Écran OLED SSD1306</text><text x="42" y="108" font-size="9" fill="#5b6575">0,96", I2C adresse 0x3C</text><text x="42" y="124" font-size="9" fill="#5b6575">VCC → 3V3 · GND → GND</text><text x="42" y="140" font-size="9" fill="#5b6575">SCL / SDA</text>
+    <text x="42" y="235"><tspan font-weight="700" fill="#17804a">●</tspan> LED verte (statut), R, GND</text>
+    <text x="42" y="275"><tspan font-weight="700" fill="#b42c2c">●</tspan> LED rouge (alerte), R, GND</text>
+    <text x="42" y="315"><tspan font-weight="700" fill="#c98a00">●</tspan> LED orange (avert.), R, GND</text>
+    <text x="562" y="92" font-weight="700">DHT22</text><text x="562" y="107" font-size="9" fill="#5b6575">température / humidité</text><text x="562" y="121" font-size="9" fill="#5b6575">VCC → 3V3 · DATA · GND</text>
+    <text x="562" y="164" font-weight="700">MQ-2</text><text x="562" y="179" font-size="9" fill="#5b6575">gaz / fumées, sortie AO</text><text x="562" y="193" font-size="9" fill="#5b6575">VCC → 5 V (VIN) · GND</text>
+    <text x="562" y="264" font-weight="700">PIR HC-SR501</text><text x="562" y="279" font-size="9" fill="#5b6575">présence, sortie OUT 3,3 V</text><text x="562" y="293" font-size="9" fill="#5b6575">VCC → 5 V (VIN) · GND</text>
+    <text x="562" y="338" font-weight="700">Buzzer piézo</text><text x="562" y="353" font-size="9" fill="#5b6575">+ → D7 · − → GND</text>
+  </g>
+  <g stroke-width="2.2" fill="none">
+    <line x1="210" y1="100" x2="300" y2="100" stroke="#7a4fd0"/><line x1="210" y1="130" x2="300" y2="130" stroke="#2b62d9"/>
+    <line x1="210" y1="231" x2="300" y2="231" stroke="#17804a"/><line x1="210" y1="271" x2="300" y2="271" stroke="#b42c2c"/><line x1="210" y1="311" x2="300" y2="311" stroke="#c98a00"/>
+    <line x1="460" y1="100" x2="550" y2="100" stroke="#0d8a8a"/><line x1="460" y1="170" x2="550" y2="170" stroke="#8a5a00"/>
+    <line x1="460" y1="270" x2="550" y2="270" stroke="#c0398a"/><line x1="460" y1="340" x2="550" y2="340" stroke="#5b6575"/>
+  </g>
+  <g font-size="8.5" fill="#5b6575"><text x="232" y="96">SCL</text><text x="232" y="126">SDA</text><text x="488" y="96">DATA</text><text x="492" y="166">AO</text><text x="490" y="266">OUT</text><text x="494" y="336">+</text></g>
+  <text x="380" y="400" font-size="9" fill="#5b6575" text-anchor="middle">USB vers le Raspberry Pi 5 : alimentation 5 V et liaison série</text>
+</svg>
+<figcaption><strong>Figure 2.</strong> Câblage logique des broches définies dans <code>firmware/include/sentinel_config.h</code>. Toutes les masses sont communes.</figcaption>
+</figure>
+<table class="compact">
+  <thead><tr><th>Composant</th><th>Broche ESP8266</th><th>Alimentation</th><th>Points d'attention</th></tr></thead>
+  <tbody>
+    <tr><td>DHT22</td><td>D5 (GPIO14)</td><td>3V3</td><td>Pull-up 10 kΩ sur DATA si capteur nu (intégrée aux modules) ; 2 s minimum entre deux lectures</td></tr>
+    <tr><td>MQ-2</td><td>A0 (ADC 10 bits)</td><td>5 V</td><td>A0 du NodeMCU : 0 à 3,3 V. Si AO peut dépasser 3,3 V, ajouter un pont diviseur. Chauffe : 60 s</td></tr>
+    <tr><td>PIR HC-SR501</td><td>D6 (GPIO12)</td><td>5 V</td><td>Sortie 3,3 V compatible ; calibration : 45 s</td></tr>
+    <tr><td>OLED SSD1306</td><td>D2 SDA (GPIO4), D1 SCL (GPIO5)</td><td>3V3</td><td>Acquittement I2C vérifié, nouvelle tentative toutes les 5 s</td></tr>
+    <tr><td>Buzzer</td><td>D7 (GPIO13)</td><td>—</td><td>Actif à l'état haut</td></tr>
+    <tr><td>LEDs verte / rouge / orange</td><td>D0 (GPIO16) / D4 (GPIO2) / D8 (GPIO15)</td><td>—</td><td>Résistance série par LED ; D8 doit rester bas au démarrage (strapping)</td></tr>
+  </tbody>
+</table>
+<p style="font-size:9pt;color:#5b6575">Valeurs des résistances et rails d'alimentation à reporter d'après le montage réel par l'équipe électronique (Mohammed, Thibault).</p>
+
+<h2 id="logiciel"><span class="num">5</span> Architecture logicielle</h2>
+<p>Les trois applications (firmware, backend, frontend) suivent une <strong>architecture propre</strong> : le domaine et les cas d'usage sont isolés des adaptateurs (GPIO, MQTT, HTTP, SQLite).</p>
+<h3>5.1 Firmware ESP8266 (C++, PlatformIO)</h3>
+<ul>
+  <li>Lecture cadencée : DHT toutes les 2 s, gaz toutes les 250 ms, affichage OLED toutes les 300 ms, envoi série toutes les secondes.</li>
+  <li>Alarme locale autonome : gaz <strong>ou</strong> mouvement, avec hystérésis sur le gaz (déclenchement à 600, retour à 550 sur l'ADC brut). Elle fonctionne même sans serveur ni écran.</li>
+  <li>Robustesse : mesures invalides (NaN, hors plage) effacées et non corrigées, préchauffage conservé après débordement de <code>millis()</code>.</li>
+  <li>Sortie : un bloc d'état texte par seconde sur le port série à 115 200 bauds. La passerelle le valide et le convertit en JSON.</li>
+</ul>
+<h3>5.2 Passerelle USB → MQTTS (Python)</h3>
+<p>Elle détecte automatiquement le port série, réassemble les blocs avec des limites de taille et de temps, puis publie sur <code>esp8266/donnees</code> en MQTTS avec son propre compte. Elle gère le débranchement et le rebranchement à chaud. Exemple de charge utile :</p>
+<pre><code>{"climateValid":true,"temperature":21.5,"humidity":40,"gasReady":true,"gas":312,
+ "pirReady":true,"presence":false,"gasAlert":false,"alarmActive":false,
+ "ledRed":false,"ledOrange":false,"ledGreen":true}</code></pre>
+<h3>5.3 Backend (Node.js, Express)</h3>
+<table class="compact">
+  <thead><tr><th>Route (sous <code>/api</code>, session obligatoire)</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /status</code>, <code>GET /readings</code></td><td>État du boîtier, historique SQLite des mesures</td></tr>
+    <tr><td><code>GET /stream</code></td><td>Temps réel par Server-Sent Events : mesures, IA, vision</td></tr>
+    <tr><td><code>POST /action</code></td><td>Commande d'actionneur publiée sur <code>esp8266/led</code> (voir l'écart E2)</td></tr>
+    <tr><td><code>GET /ai/status|latest|history</code>, <code>GET /vision</code></td><td>Analyses IA, détections, flux MJPEG authentifié</td></tr>
+    <tr><td><code>GET|PUT /settings/notifications</code></td><td>Destinataire des alertes e-mail</td></tr>
+    <tr><td><code>/auth/*</code>, <code>GET /health</code></td><td>Better Auth (inscription publique désactivée), sonde de santé</td></tr>
+  </tbody>
+</table>
+<p>Les mesures sont horodatées, stockées dans SQLite (rétention de 7 jours par défaut), transmises à l'IA dans l'ordre puis diffusées au dashboard. Chaque commande est journalisée avec l'e-mail de son auteur.</p>
+<h3>5.4 Dashboard (React, TypeScript)</h3>
+<p>Trois pages : <strong>Métriques</strong> (état du boîtier, courbes temps réel, historique de chaque capteur, panneau IA), <strong>Caméra</strong> (flux annoté, détections, reconnaissance faciale) et <strong>Paramètres</strong> (notifications). Thème clair ou sombre, indicateur de connexion au broker.</p>
+<figure><img src="assets/metrics-top.png" alt="Page Métriques du dashboard"><figcaption><strong>Figure 3.</strong> Page Métriques : état du boîtier, alarme locale, courbes temps réel.</figcaption></figure>
+
+<h2 id="ia"><span class="num">6</span> Documentation de l'IA</h2>
+<p>Service Python FastAPI, exécuté localement sur le PC Serveur Local, sans appel au cloud. Les poids des modèles sont téléchargés à la construction et vérifiés par empreinte SHA-256.</p>
+<h3>6.1 Vision intelligente</h3>
+<table class="compact">
+  <thead><tr><th>Étape</th><th>Modèle / technique</th><th>Paramètres</th></tr></thead>
+  <tbody>
+    <tr><td>Capture</td><td>OpenCV, webcam USB du serveur</td><td>Redimensionnement systématique en 640×480, 15 FPS maximum</td></tr>
+    <tr><td>Détection de personnes</td><td>YOLOv8n (classe « person » uniquement)</td><td>Confiance ≥ 0,55 ; une image sur 3 analysée</td></tr>
+    <tr><td>Suivi</td><td>ByteTrack</td><td>Identifiant par personne ; alerte confirmée après 3 détections consécutives</td></tr>
+    <tr><td>Reconnaissance faciale</td><td>YuNet (détection) + SFace (embeddings)</td><td>Similarité cosinus ≥ 0,55 avec les photos de référence ; sinon « Inconnu »</td></tr>
+  </tbody>
+</table>
+<p>La capture, YOLO et la reconnaissance faciale tournent dans des workers séparés : une inférence lente ne bloque ni le flux vidéo ni les autres analyses.</p>
+<table class="compact">
+  <thead><tr><th>Mesure (image 640×480, 20 itérations, conteneur de production)</th><th>Médiane</th></tr></thead>
+  <tbody>
+    <tr><td>YOLOv8n — poste de développement Apple M1, CPU</td><td>133,6 ms (p95 222,9 ms)</td></tr>
+    <tr><td>YuNet — poste de développement Apple M1, CPU</td><td>49,0 ms</td></tr>
+    <tr><td>Raspberry Pi 5</td><td><span class="todo">à mesurer</span></td></tr>
+  </tbody>
+</table>
+<p>L'objectif de 100 ms par trame n'est pas atteint par YOLOv8n en pleine résolution sur CPU. L'analyse d'une image sur trois garde le flux fluide ; les pistes d'optimisation sont en section 9.</p>
+<h3>6.2 Maintenance prédictive</h3>
+<p>Aucune règle statique de type <code>if temp &gt; 40</code> : l'anomalie est apprise par un <strong>Isolation Forest</strong> (scikit-learn, 200 arbres, contamination 0,03) entraîné sur des périodes normales réelles validées.</p>
+<ul>
+  <li><strong>13 variables</strong> par mesure : température, humidité, gaz, présence, et, sur une fenêtre glissante de 12 mesures, variations, moyennes, écarts-types, vitesses d'évolution et produit température × gaz. Ce dernier capte la corrélation lente entre hausse de température et micro-déviation de gaz, avant tout seuil critique.</li>
+  <li>Un même extracteur de variables sert à l'entraînement et à l'inférence en ligne, ce qui évite les écarts entre les deux.</li>
+  <li>Les données manquantes sont remplacées par les médianes apprises, avec une confiance réduite et une raison explicite. Une coupure de plus de 30 s ouvre une nouvelle séquence.</li>
+  <li>Sans modèle entraîné, le statut est « untrained » : aucun faux score n'est produit. Les mesures simulées sont exclues de l'export d'entraînement.</li>
+</ul>
+<h3>6.3 Fusion et moteur de risque</h3>
+<p>Les indices d'intrusion (mouvement PIR, personnes détectées par YOLO) et d'environnement (anomalie corrélée gaz/température) sont fusionnés en un score de 0 à 100. Les niveaux sont SAFE &lt; 25, LOW &lt; 50, MEDIUM &lt; 75, HIGH &lt; 90, puis CRITICAL. Les catégories sont INTRUSION, ENVIRONMENT, SENSOR_ANOMALY et MULTI_THREAT (+12 points). Une donnée périmée est ignorée et l'analyse est alors marquée « partielle ». Ces scores sont des indices démonstratifs, pas des probabilités calibrées.</p>
+<figure class="narrow"><img src="assets/ai-panel-alarm.png" alt="Panneau IA du dashboard"><figcaption><strong>Figure 4.</strong> Panneau IA : mouvement PIR sans confirmation caméra, analyse partielle.</figcaption></figure>
+
+<h2 id="securite"><span class="num">7</span> Matrice de sécurité</h2>
+<h3>7.1 Chiffrement des flux (TLS)</h3>
+<table class="compact">
+  <thead><tr><th>Liaison</th><th>Chiffrement</th><th>Authentification</th><th>Statut</th></tr></thead>
+  <tbody>
+    <tr><td>Navigateur → nginx</td><td>TLS 1.2/1.3, ECDHE + AES-GCM/ChaCha20, HSTS 1 an</td><td>Cookie <code>__Secure-</code> HttpOnly</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>nginx → backend</td><td>TLS, certificat vérifié par la CA</td><td>Réseau interne</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>backend / bridge → mosquitto</td><td>MQTTS, nom d'hôte vérifié</td><td>Comptes distincts + ACL</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>backend → ai</td><td>TLS, certificat vérifié</td><td>Jeton Bearer</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td><strong>ESP8266 → serveur</strong></td><td><strong>Aucun (USB série)</strong></td><td>Accès physique</td><td><span class="st ko">Écart E1</span></td></tr>
+  </tbody>
+</table>
+<p>Une autorité de certification locale (ECDSA P-256) est créée au premier démarrage. Chaque service reçoit un certificat de 397 jours, renouvelé automatiquement 30 jours avant son expiration.</p>
+<h3>7.2 Durcissement (hardening)</h3>
+<table class="compact">
+  <thead><tr><th>Couche</th><th>Mesure</th></tr></thead>
+  <tbody>
+    <tr><td>Hôte</td><td>SSH par clé uniquement (<code>PasswordAuthentication no</code>, <code>PermitRootLogin no</code>), UFW en refus par défaut (22, 80, 443), mises à jour de sécurité automatiques</td></tr>
+    <tr><td>Exposition</td><td>Seuls 80 (redirection) et 443 sont publiés ; broker sur 127.0.0.1 ; backend et IA non publiés</td></tr>
+    <tr><td>Conteneurs</td><td>Utilisateur non-root distinct par service, système de fichiers en lecture seule, toutes capacités Linux retirées, <code>no-new-privileges</code>, accès matériel limité par règles cgroup (série, vidéo), aucun conteneur privilégié</td></tr>
+    <tr><td>Réseau Docker</td><td>Segment <code>core</code> interne sans Internet ; segmentation edge / core</td></tr>
+    <tr><td>Application</td><td>Inscription désactivée, mots de passe de 12 caractères minimum, 5 tentatives par minute et par IP, vérification de l'origine, CSP stricte, <code>X-Frame-Options: DENY</code>, limitation du débit par nginx</td></tr>
+    <tr><td>MCO</td><td>Journaux limités à 3 × 10 Mo par service, broker sans persistance disque, sondes de santé, redémarrage automatique</td></tr>
+  </tbody>
+</table>
+<h3>7.3 Gestion des secrets</h3>
+<p>Aucun secret dans le dépôt ni dans un fichier à compléter. Clé de session, jeton IA, mots de passe MQTT et mot de passe administrateur initial sont générés aléatoirement (de 96 à 256 bits) dans un volume dédié. Chaque fichier a un propriétaire unique et des droits <code>0400</code> ; les secrets sont lus via des variables <code>*_FILE</code> et n'apparaissent pas dans <code>docker inspect</code>.</p>
+
+<h2 id="audit"><span class="num">8</span> Rapport d'audit</h2>
+<h3>8.1 Auto-audit avant le pentest croisé</h3>
+<p><strong>Date</strong> : 8 octobre 2026. <strong>Périmètre</strong> : stack de production déployée depuis une installation vierge du dépôt. <strong>Outils</strong> : Nmap 7.98 (scan TCP complet, <code>ssl-enum-ciphers</code>), OpenSSL 3, clients Mosquitto 2.0.22, curl. Les tests ont été lancés depuis les réseaux Docker, pour simuler un attaquant du LAN et un service compromis.</p>
+<table class="compact">
+  <thead><tr><th>Attaque / contrôle</th><th>Résultat observé</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Scan TCP 1–65535 du frontal</td><td>8080 (redirection) et 8443 (TLS) seulement</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Accès au broker et à l'IA depuis le segment frontal</td><td>Noms non résolus, aucune route</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Énumération TLS nginx et Mosquitto</td><td>TLS 1.2/1.3 uniquement, toutes suites notées A ; TLS 1.0/1.1 refusés (alerte 70)</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Interception (MitM) : client sans la CA</td><td>Connexion MQTTS refusée</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>MQTT anonyme, mauvais mot de passe, en clair sur 1883</td><td>Refusés</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Injection de commande : <code>bridge</code> publie sur <code>esp8266/led</code></td><td>Rejeté par l'ACL (code 135)</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>API sans session ; origine étrangère</td><td>401 ; 403</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Force brute avec <code>X-Forwarded-For</code> falsifié</td><td>429 dès la 5<sup>e</sup> tentative</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>En-têtes de sécurité HTTPS</td><td>HSTS, CSP, <code>X-Frame-Options: DENY</code> présents</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Service compromis (IA) : lecture du secret de session</td><td>Permission refusée</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Service compromis : sortie Internet depuis <code>core</code></td><td>Impossible (aucune résolution DNS)</td><td><span class="st ok">OK</span></td></tr>
+    <tr><td>Écriture dans le conteneur backend</td><td>Système de fichiers en lecture seule, uid 1000</td><td><span class="st ok">OK</span></td></tr>
+  </tbody>
+</table>
+<h3>8.2 Constats et recommandations</h3>
+<table class="compact">
+  <thead><tr><th>#</th><th>Constat</th><th>Gravité</th><th>Recommandation</th></tr></thead>
+  <tbody>
+    <tr><td>A1</td><td>Lien ESP8266 → serveur non chiffré (USB série) ; un accès physique au câble permet de lire ou d'injecter des mesures</td><td><span class="st ko">Élevée</span></td><td>Restaurer le firmware Wi-Fi MQTTS avec CA épinglée et compte dédié (écart E1)</td></tr>
+    <tr><td>A2</td><td>Backend joignable en HTTPS depuis le segment frontal (nécessaire au proxy)</td><td><span class="st part">Faible</span></td><td>Accepté : authentification et TLS obligatoires, segment non publié</td></tr>
+    <tr><td>A3</td><td>Clé privée de la CA sur le même hôte que les services</td><td><span class="st part">Faible</span></td><td>Sauvegarde chiffrée hors serveur ; en production réelle, CA hors ligne</td></tr>
+    <tr><td>A4</td><td>Déni de service sur le Wi-Fi (désauthentification) hors du périmètre logiciel</td><td><span class="st part">Moyenne</span></td><td>WPA3 / PMF sur le point d'accès ; l'alarme locale du boîtier reste autonome</td></tr>
+  </tbody>
+</table>
+<h3>8.3 Pentest croisé du jeudi</h3>
+<p>À compléter avec les attaques effectivement menées par les autres groupes contre notre table, et avec nos propres attaques.</p>
+<table class="compact">
+  <thead><tr><th>Groupe attaquant</th><th>Technique (Nmap, Wireshark, Metasploit…)</th><th>Cible</th><th>Résultat</th><th>Correctif</th></tr></thead>
+  <tbody>
+    <tr><td><span class="todo">&nbsp;</span></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><span class="todo">&nbsp;</span></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><span class="todo">&nbsp;</span></td><td></td><td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+
+<h2 id="conformite"><span class="num">9</span> Conformité au cahier des charges</h2>
+<table class="compact">
+  <thead><tr><th>Exigence</th><th>Réalisation</th><th>Statut</th></tr></thead>
+  <tbody>
+    <tr><td>Firmware C++ ESP8266, capteurs cadencés, OLED</td><td>PlatformIO, DHT22, MQ-2, PIR, SSD1306, tests natifs</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>API REST / WebSocket, historique</td><td>Express, REST + SSE, SQLite</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Dashboard : courbes temps réel, statut, webcam</td><td>React, trois pages, flux MJPEG authentifié</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Contrôle réactif des actionneurs à distance</td><td>Panneau présent, commande publiée, mais non relayée jusqu'à la carte</td><td><span class="st ko">Écart E2</span></td></tr>
+    <tr><td>Vision : présence humaine en temps réel</td><td>YOLOv8n + ByteTrack ; reconnaissance faciale en plus</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Maintenance prédictive sans seuils statiques</td><td>Isolation Forest, 13 variables temporelles</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Images 640×480, &lt; 100 ms par trame</td><td>640×480 ; 134 ms sur M1, 1 image sur 3 analysée</td><td><span class="st part">Partiel E3</span></td></tr>
+    <tr><td>Stack Docker Compose (base, API, Mosquitto)</td><td>6 services isolés ; base SQLite embarquée dans l'API</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Point d'accès Wi-Fi et plan d'adressage</td><td>Réalisés sur le Raspberry Pi ; configuration absente du dépôt</td><td><span class="st part">À documenter E4</span></td></tr>
+    <tr><td>TLS ESP8266 ↔ stack (obligatoire)</td><td>TLS partout à partir de la passerelle ; liaison ESP en USB</td><td><span class="st ko">Écart E1</span></td></tr>
+    <tr><td>Hardening : UFW, SSH par clé, privilèges Docker</td><td>Procédure fournie ; conteneurs durcis et vérifiés</td><td><span class="st ok">Conforme</span></td></tr>
+    <tr><td>Monitoring et MCO</td><td>Sondes de santé, rotation des journaux, <code>docker stats</code></td><td><span class="st part">Partiel</span></td></tr>
+    <tr><td>Audit et rapport post-pentest</td><td>Auto-audit réalisé ; pentest croisé à reporter</td><td><span class="st part">À compléter</span></td></tr>
+    <tr><td>Dépôt propre, README, aucun secret en clair</td><td>Secrets générés au déploiement, README par projet</td><td><span class="st ok">Conforme</span></td></tr>
+  </tbody>
+</table>
+<h3>Plan d'action</h3>
+<ol class="steps">
+  <li><strong>E1 et E2 — liaison Wi-Fi MQTTS bidirectionnelle.</strong> Le firmware du commit <code>d83e871</code> publie déjà en MQTTS (CA épinglée, compte dédié) et reçoit les commandes sur <code>esp8266/led</code>. Il faut le réintégrer à l'architecture actuelle, créer un compte <code>esp8266</code> dans l'ACL et ouvrir le port 8883 sur l'interface Wi-Fi uniquement. Cela résout le chiffrement obligatoire et le contrôle à distance.</li>
+  <li><strong>E3 — latence.</strong> Inférence YOLO en 320×320 (<code>imgsz=320</code>), export ONNX ou NCNN pour le Raspberry Pi 5, et mesure sur la cible.</li>
+  <li><strong>E4 — réseau.</strong> Versionner la configuration du point d'accès (hostapd, dnsmasq ou NetworkManager) et le plan d'adressage final.</li>
+</ol>
+
+<h2 id="qualite"><span class="num">10</span> Qualité et exploitation</h2>
+<table class="compact">
+  <thead><tr><th>Projet</th><th>Tests automatisés</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td>Firmware (runner natif, configurations par défaut et surchargées)</td><td>10 suites</td><td><span class="st ok">10/10</span></td></tr>
+    <tr><td>Passerelle USB</td><td>28</td><td><span class="st ok">28/28</span></td></tr>
+    <tr><td>Backend</td><td>85</td><td><span class="st ok">85/85</span></td></tr>
+    <tr><td>Frontend (et lint, build)</td><td>39</td><td><span class="st ok">39/39</span></td></tr>
+    <tr><td>Service IA</td><td>127</td><td><span class="st ok">127/127</span></td></tr>
+  </tbody>
+</table>
+<p><strong>Déploiement</strong> : <code>docker compose up -d --build</code> suffit, sans fichier de configuration. Le service <code>init</code> crée la PKI et les secrets, puis tous les services démarrent et deviennent sains en moins de 25 secondes une fois les images construites. Cela a été vérifié depuis un clone vierge du dépôt, sans cache. La procédure de mise en production et le guide de déploiement sont dans <code>docs/pdf/</code>, avec les documentations technique et utilisateur de chaque projet.</p>
+
+<section class="poster" id="poster">
+  <div class="p-head">
+    <div>
+      <div class="p-kind">AetherCorp Industrial Solutions · Workshop EPSI 2026</div>
+      <h2 class="p-title">SENTINEL-X</h2>
+      <div class="p-tag">La sécurité à la bordure.</div>
+    </div>
+    <svg viewBox="0 0 24 24" width="120" height="120" fill="none" stroke="#a9c2ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+  </div>
+
+  <div class="p-card">
+    <h3>Un boîtier autonome, un centre de commandement durci</h3>
+    <p>Sentinel-X surveille les micro-centrales isolées contre trois menaces simultanées : fuites de gaz et surchauffes, intrusions physiques, cyberattaques. Le boîtier ESP8266 capte et alerte localement ; le Raspberry Pi 5 analyse, chiffre, stocke et supervise.</p>
+  </div>
+
+  <div class="p-grid4">
+    <div class="p-num"><b>TLS 1.2/1.3</b><span>sur chaque liaison réseau, suites notées A</span></div>
+    <div class="p-num"><b>6</b><span>services Docker isolés, non-root, lecture seule</span></div>
+    <div class="p-num"><b>3 IA</b><span>YOLOv8n, YuNet/SFace, Isolation Forest</span></div>
+    <div class="p-num"><b>1</b><span>commande pour tout déployer, aucun secret à saisir</span></div>
+  </div>
+
+  <div class="p-card">
+    <h3>Architecture</h3>
+    <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+      <defs><marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#17804a"/></marker></defs>
+      <rect x="170" y="5" width="585" height="220" rx="12" fill="#f4f6fa" stroke="#c9d1de" stroke-dasharray="5 4"/>
+      <text x="182" y="23" font-size="11" fill="#5b6575" font-weight="700">Raspberry Pi 5 — Docker Compose</text>
+      <g font-size="12" text-anchor="middle">
+        <rect x="10" y="30" width="135" height="56" rx="8" fill="#fff" stroke="#c9d1de"/><text x="77" y="54" font-weight="700" fill="#142033">Superviseur</text><text x="77" y="72" font-size="10" fill="#5b6575">dashboard HTTPS</text>
+        <rect x="10" y="150" width="135" height="56" rx="8" fill="#fff" stroke="#c9d1de"/><text x="77" y="174" font-weight="700" fill="#142033">Boîtier ESP8266</text><text x="77" y="192" font-size="10" fill="#5b6575">DHT22 · MQ-2 · PIR · OLED</text>
+        <rect x="200" y="40" width="110" height="46" rx="7" fill="#2b62d9"/><text x="255" y="68" font-weight="700" fill="#fff">nginx</text>
+        <rect x="350" y="40" width="110" height="46" rx="7" fill="#2b62d9"/><text x="405" y="68" font-weight="700" fill="#fff">API Node</text>
+        <rect x="500" y="40" width="110" height="46" rx="7" fill="#2b62d9"/><text x="555" y="62" font-weight="700" fill="#fff">IA Python</text><text x="555" y="77" font-size="9.5" fill="#dbe6ff">+ webcam USB</text>
+        <rect x="350" y="150" width="110" height="46" rx="7" fill="#2b62d9"/><text x="405" y="178" font-weight="700" fill="#fff">Mosquitto</text>
+        <rect x="200" y="150" width="110" height="46" rx="7" fill="#2b62d9"/><text x="255" y="178" font-weight="700" fill="#fff">Passerelle</text>
+        <rect x="640" y="40" width="100" height="46" rx="7" fill="#fff" stroke="#2b62d9"/><text x="690" y="68" font-weight="700" fill="#142033">SQLite</text>
+      </g>
+      <g stroke="#17804a" stroke-width="2" fill="none" marker-end="url(#pa)">
+        <line x1="145" y1="60" x2="198" y2="62"/><line x1="310" y1="63" x2="348" y2="63"/><line x1="460" y1="63" x2="498" y2="63"/>
+        <line x1="310" y1="173" x2="348" y2="173"/><line x1="405" y1="150" x2="405" y2="88"/>
+        <polyline points="405,40 405,30 690,30 690,38"/>
+      </g>
+      <line x1="145" y1="178" x2="198" y2="175" stroke="#5b6575" stroke-width="2" stroke-dasharray="5 3"/>
+      <g font-size="10" fill="#17804a" font-weight="700"><text x="150" y="52">HTTPS</text><text x="465" y="56">HTTPS</text><text x="412" y="125">MQTTS + ACL</text><text x="312" y="167">MQTTS</text><text x="150" y="168" fill="#5b6575">USB</text></g>
+    </svg>
+  </div>
+
+  <div class="p-grid">
+    <div class="p-card">
+      <h3>Edge &amp; IoT</h3>
+      <ul><li>Firmware C++ en architecture propre, testé nativement</li><li>Alarme locale gaz ou mouvement, autonome sans serveur</li><li>Écran OLED d'état, LEDs et buzzer</li></ul>
+    </div>
+    <div class="p-card">
+      <h3>Intelligence artificielle locale</h3>
+      <ul><li>YOLOv8n + ByteTrack : présence humaine confirmée</li><li>Reconnaissance faciale YuNet / SFace</li><li>Isolation Forest : dérives corrélées gaz × température</li></ul>
+    </div>
+    <div class="p-card">
+      <h3>Infrastructure</h3>
+      <ul><li>Docker Compose, réseaux edge / core interne</li><li>Sondes de santé, redémarrage automatique</li><li>PKI et secrets générés au premier démarrage</li></ul>
+    </div>
+    <div class="p-card">
+      <h3>Cybersécurité</h3>
+      <ul><li>HTTPS, MQTTS, HTTPS + jeton entre services</li><li>SSH par clé, UFW, conteneurs non-root en lecture seule</li><li>Auto-audit Nmap : 12 contrôles, 12 conformes</li></ul>
+    </div>
+  </div>
+
+  <div class="p-grid">
+    <div class="p-shot"><img src="assets/metrics-top.png" alt="Dashboard Métriques"></div>
+    <div class="p-shot"><img src="assets/ai-panel-alarm.png" alt="Panneau IA"></div>
+  </div>
+
+  <div class="p-foot">
+    <span>Naouar · Mohammed · Thibault · Alexis</span>
+    <span>Workshop2026-M1-G<span class="todo" style="color:#142033">n</span> · github.com/alexkjzz/workshop</span>
+  </div>
+</section>
+
+</body>
+</html>
