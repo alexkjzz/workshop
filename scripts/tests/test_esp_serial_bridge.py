@@ -1,4 +1,6 @@
 """Parser and forwarding tests; no serial device, broker or optional package."""
+import contextlib
+import io
 import json
 from pathlib import Path
 import sys
@@ -279,6 +281,16 @@ class PortAndCliTests(unittest.TestCase):
         self.assertEqual((args.baud, args.mqtt_host, args.mqtt_port, args.mqtt_topic),
                          (115200, "127.0.0.1", 1883, "esp8266/donnees"))
         self.assertEqual(args.max_messages, 3)
+
+    def test_cli_secure_mqtt_options(self):
+        args = cli_arguments(["--mqtt-port", "8883", "--mqtt-ca", "ca.crt",
+                              "--mqtt-username", "bridge", "--mqtt-password-file", "secret"])
+        self.assertEqual((args.mqtt_port, args.mqtt_ca, args.mqtt_username, args.mqtt_password_file),
+                         (8883, "ca.crt", "bridge", "secret"))
+        self.assertIsNone(cli_arguments([]).mqtt_ca)
+        # A user name without its password file (or the reverse) is refused.
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            cli_arguments(["--mqtt-username", "bridge"])
 
     def test_diagnostic_explains_pinned_port_after_windows_renumbering(self):
         ports = [port("COM6", "USB-SERIAL CH340", 0x1a86), port("COM4", "Bluetooth")]

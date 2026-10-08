@@ -369,6 +369,10 @@ Autoriser seulement le reseau interne a joindre le service Python du serveur,
 avec un token commun (la webcam reste sur l'hote). Le lancement Windows
 documente utilise directement la boucle locale.
 
+En production Docker, le service ecoute en HTTPS (`AI_TLS_CERT_FILE`,
+`AI_TLS_KEY_FILE`, `AI_TLS_CA_FILE`) et lit son jeton dans
+`AI_SERVICE_TOKEN_FILE` ; voir [le deploiement](../docs/DEPLOIEMENT.md).
+
 Python ecoute par defaut sur `127.0.0.1`. Un token optionnel commun
 `AI_SERVICE_TOKEN` protege status, predictions, controles et video avec
 `Authorization: Bearer ...`. Le backend le transmet ; aucun secret n'est

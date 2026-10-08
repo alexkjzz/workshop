@@ -1,0 +1,13 @@
+.venv/
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.runtime/
+tests/
+data/
+known_faces/
+models/*.pt
+models/*.onnx
+models/*.joblib
+*.log

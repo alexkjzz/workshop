@@ -164,7 +164,10 @@ def main() -> None:
         return
     with listener:
         logging.getLogger("STARTUP").info("Démarrage de Sentinel-X IA sur %s", local_service_url(settings))
-        config = uvicorn.Config(lambda: create_app(settings), factory=True, host=settings.host, port=settings.port)
+        tls = ({"ssl_certfile": str(settings.tls_cert_file), "ssl_keyfile": str(settings.tls_key_file)}
+               if settings.tls_cert_file else {})
+        config = uvicorn.Config(lambda: create_app(settings), factory=True, host=settings.host, port=settings.port,
+                                **tls)
         try:
             uvicorn.Server(config).run(sockets=[listener])
         except KeyboardInterrupt:

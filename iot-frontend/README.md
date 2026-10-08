@@ -72,8 +72,10 @@ npm run lint
 npm run build
 ```
 
-En production, l'image Docker sert le build avec nginx (`nginx.conf`), qui
-relaie `/api` vers le backend et applique les en-tetes de securite (CSP).
+En production, l'image Docker sert le build avec nginx
+(`nginx/default.conf.template`) : HTTP redirige vers HTTPS (TLS 1.2/1.3, HSTS),
+relais de `/api` vers le backend en HTTPS verifie, en-tetes de securite (CSP)
+et limites de debit par IP.
 `public/theme-init.js` applique le theme avant le premier affichage ; c'est un
 fichier externe pour rester compatible avec la CSP.
 

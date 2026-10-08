@@ -61,6 +61,16 @@ Configuration is read from environment variables:
 - `AUTH_DATABASE_PATH` (default: `data/auth.db`)
 - `TRUST_PROXY` (Express `trust proxy` value; default: `loopback`, set to the
   proxy subnet when running behind nginx)
+- `TLS_CERT_FILE`, `TLS_KEY_FILE` (serve HTTPS instead of HTTP; used in Docker)
+- `MQTT_USERNAME`, `MQTT_PASSWORD` (broker account; use an `mqtts://` URL and
+  `NODE_EXTRA_CA_CERTS` for a local CA)
+- `PUBLIC_HOSTS`, `PUBLIC_HTTPS_PORT` (production: derive the allowed HTTPS
+  origins and `BETTER_AUTH_URL` when `FRONTEND_ORIGINS` is not set)
+- `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD_FILE` (first deployment: an
+  administrator is created when the account database is empty)
+
+Secrets can be read from files: `BETTER_AUTH_SECRET_FILE`, `AI_SERVICE_TOKEN_FILE`,
+`MQTT_PASSWORD_FILE` and `SMTP_PASSWORD_FILE` take precedence over the plain variables.
 
 For example, publish a simulated reading with Mosquitto:
 

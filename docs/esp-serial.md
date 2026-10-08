@@ -48,6 +48,11 @@ identifiant `sentinel-x-01`. Si le backend utilise d'autres valeurs :
 Cette passerelle vise le broker local TCP du projet, sans authentification ni
 TLS : le broker doit rester limité à la machine locale.
 
+En production Docker, le service `bridge` lance cette passerelle
+automatiquement, en MQTTS vers le broker authentifié. Hors Docker, les options
+`--mqtt-ca`, `--mqtt-username` et `--mqtt-password-file` activent TLS et
+l'authentification (voir [le déploiement](DEPLOIEMENT.md)).
+
 Pour un diagnostic limité à cinq envois, utiliser `--max-messages 5`.
 **Ctrl+C** ferme le port et la connexion MQTT. L'ouverture d'un port USB peut
 réinitialiser certaines cartes selon leur pilote ; la passerelle laisse les

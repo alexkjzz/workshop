@@ -232,6 +232,8 @@
   <li><strong>Taille des requêtes</strong> : 16 Kio par défaut ; 21 Mio uniquement pour l'enrôlement facial authentifié.</li>
   <li><strong>Secrets</strong> : <code>BETTER_AUTH_SECRET</code> obligatoire (≥ 32 caractères, refus de démarrer sinon) ; aucun secret dans le dépôt (<code>.env</code> ignorés, contrôle <code>scripts/check-repository.py</code>).</li>
   <li><strong>Traçabilité</strong> : chaque commande LED et chaque modification des paramètres sont journalisées avec l'e-mail de l'opérateur.</li>
+  <li><strong>Transport</strong> : en production, le backend sert lui-même HTTPS (<code>TLS_CERT_FILE</code>, TLS 1.2 minimum) derrière nginx, se connecte au broker en MQTTS avec un compte dédié et appelle l'IA en HTTPS, en vérifiant tous les certificats avec la CA locale (<code>NODE_EXTRA_CA_CERTS</code>).</li>
+  <li><strong>Secrets en fichiers</strong> : <code>BETTER_AUTH_SECRET_FILE</code>, <code>AI_SERVICE_TOKEN_FILE</code>, <code>MQTT_PASSWORD_FILE</code> et <code>SMTP_PASSWORD_FILE</code> sont prioritaires sur les variables en clair.</li>
   <li><strong>Conteneur</strong> : utilisateur non-root, système de fichiers en lecture seule, capacités Linux retirées, <code>no-new-privileges</code>, API non publiée (accessible seulement via nginx).</li>
 </ul>
 
@@ -252,6 +254,10 @@
     <tr><td><code>TRUST_PROXY</code></td><td>loopback</td><td>Proxys autorisés à transmettre l'IP client</td></tr>
     <tr><td><code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_SECURE</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>MAIL_FROM</code></td><td>587, false</td><td>Envoi des notifications</td></tr>
     <tr><td><code>MAIL_OUTBOX_DIR</code></td><td>vide</td><td>Mode test : e-mails écrits en <code>.eml</code></td></tr>
+    <tr><td><code>TLS_CERT_FILE</code> / <code>TLS_KEY_FILE</code></td><td>vide</td><td>Servir en HTTPS (production)</td></tr>
+    <tr><td><code>MQTT_USERNAME</code> / <code>MQTT_PASSWORD(_FILE)</code></td><td>vide</td><td>Compte du broker</td></tr>
+    <tr><td><code>PUBLIC_HOSTS</code> / <code>PUBLIC_HTTPS_PORT</code></td><td>vide / 443</td><td>Origines HTTPS déduites si <code>FRONTEND_ORIGINS</code> est absent</td></tr>
+    <tr><td><code>INITIAL_ADMIN_EMAIL</code> / <code>INITIAL_ADMIN_PASSWORD_FILE</code></td><td>vide</td><td>Administrateur créé si la base de comptes est vide</td></tr>
   </tbody>
 </table>
 <h4>Scripts npm</h4>
@@ -262,7 +268,7 @@ npm test             # tests (runner natif de Node via tsx)
 npm run typecheck    # vérification de types
 npm run user:create -- operateur@exemple.fr "Nom"
 npm run simulate     # simulateur MQTT + caméra factice (source: simulation)</code></pre>
-<p><strong>Docker</strong> : image multi-étapes <code>node:24-slim</code>, healthcheck sur <code>/api/health</code>. <code>docker-compose.yml</code> associe le backend au frontend nginx sur un réseau interne <code>172.30.10.0/24</code>, avec <code>TRUST_PROXY</code> limité à ce sous-réseau. Le volume <code>backend-data</code> conserve les bases. Le broker et le service IA (qui a besoin de la webcam) restent sur l'hôte.</p>
+<p><strong>Docker</strong> : image multi-étapes <code>node:24-slim</code>, healthcheck HTTPS sur <code>/api/health</code>. <code>docker-compose.yml</code> déploie toute la plateforme : un service <code>init</code> génère la CA locale, les certificats et les secrets, puis nginx, le backend, Mosquitto (TLS uniquement), le service IA et la passerelle USB démarrent. Le backend est relié à nginx sur le réseau <code>edge</code> (<code>TRUST_PROXY</code> limité à ce sous-réseau) et au broker et à l'IA sur le réseau interne <code>core</code>, sans Internet. Le volume <code>backend-data</code> conserve les bases. Voir le guide de déploiement.</p>
 
 <h2 id="qualite"><span class="num">11</span> Tests et qualité</h2>
 <p>Les tests s'exécutent avec le runner natif de Node (<code>node:test</code> via <code>tsx</code>), sans broker, sans base persistante ni service IA réel :</p>

@@ -143,7 +143,7 @@
 <ul>
   <li>La session est un cookie <code>HttpOnly</code> géré par Better Auth : il n'est pas lisible par le JavaScript de la page.</li>
   <li>Aucun secret ni URL interne (FastAPI, broker, jeton IA) n'est présent dans le code client.</li>
-  <li>En production, nginx applique une Content Security Policy stricte (<code>default-src 'self'</code>, <code>frame-ancestors 'none'</code>), <code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code> et <code>Referrer-Policy: no-referrer</code>.</li>
+  <li>En production, nginx sert uniquement HTTPS (TLS 1.2/1.3, HSTS ; le HTTP redirige) et applique une Content Security Policy stricte (<code>default-src 'self'</code>, <code>frame-ancestors 'none'</code>), <code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code>, <code>Referrer-Policy: no-referrer</code> et <code>Permissions-Policy</code>. Il limite le débit et le nombre de connexions par IP, et joint le backend en HTTPS en vérifiant son certificat. Le cookie de session porte le préfixe <code>__Secure-</code>.</li>
   <li>Les photos d'enrôlement sont vérifiées côté client (format, taille, nombre) pour un retour immédiat. Le serveur refait toutes les vérifications, qui seules font foi.</li>
 </ul>
 
@@ -152,7 +152,7 @@
 npm test         # règles du domaine et adaptateurs (runner natif de Node)
 npm run lint     # oxlint
 npm run build    # tsc -b puis vite build vers dist/</code></pre>
-<p><strong>Production</strong> : l'image Docker compile l'application puis la sert avec <code>nginx-unprivileged</code> (utilisateur non-root, port 8080). nginx relaie <code>/api/</code> vers le backend sur le réseau interne, avec une limite de taille élargie uniquement pour la route d'enrôlement facial.</p>
+<p><strong>Production</strong> : l'image Docker compile l'application puis la sert avec <code>nginx-unprivileged</code> (utilisateur non-root ; 8080 pour la redirection, 8443 pour HTTPS, publiés sur 80 et 443). La configuration <code>nginx/default.conf.template</code> est rendue au démarrage. nginx relaie <code>/api/</code> vers le backend en HTTPS sur le réseau interne, sans mise en tampon pour SSE et MJPEG, avec une limite de taille élargie uniquement pour la route d'enrôlement facial. Voir le guide de déploiement.</p>
 <table>
   <thead><tr><th>Vérification (état du dépôt à la génération)</th><th>Résultat</th></tr></thead>
   <tbody>

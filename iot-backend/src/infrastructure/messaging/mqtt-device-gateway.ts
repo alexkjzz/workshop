@@ -24,8 +24,14 @@ export class MqttDeviceGateway implements DeviceGateway {
     url: string,
     private readonly topics: MqttTopics,
     private readonly handlers: MqttHandlers,
+    credentials?: { username: string; password: string },
   ) {
-    this.client = mqtt.connect(url, { reconnectPeriod: 1000, connectTimeout: 10000 });
+    this.client = mqtt.connect(url, {
+      reconnectPeriod: 1000,
+      connectTimeout: 10000,
+      // mqtts:// verifies the broker certificate (NODE_EXTRA_CA_CERTS for a local CA).
+      ...(credentials?.username ? { username: credentials.username, password: credentials.password } : {}),
+    });
 
     this.client.on('connect', () => {
       this.connected = true;

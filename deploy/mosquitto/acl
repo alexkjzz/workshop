@@ -1,0 +1,11 @@
+# Least privilege: each account only reaches the topics it needs.
+
+# USB bridge: publishes the box telemetry.
+user bridge
+topic write esp8266/donnees
+
+# Backend: reads telemetry and vision detections, publishes LED commands.
+user backend
+topic read esp8266/donnees
+topic read sentinel/vision
+topic write esp8266/led

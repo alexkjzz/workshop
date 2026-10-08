@@ -1,76 +1,190 @@
-# Stack web SENTINEL-X : backend (API + Better Auth) et frontend (nginx).
-# Le broker MQTT n'est pas inclus : renseigner MQTT_URL dans .env.
+# Sentinel-X — production stack. `docker compose up -d --build` is enough:
+# the init service creates the local CA, TLS certificates and every secret.
+#
+#   Browser --HTTPS--> nginx (frontend) --HTTPS--> backend --MQTTS--> mosquitto <--MQTTS-- bridge <--USB-- ESP8266
+#                                                  backend --HTTPS + token--> ai (webcam)
+#
+# Only ports 80 (redirect) and 443 are published. Mosquitto is also reachable on
+# 127.0.0.1:8883 (TLS) for a bridge running on the host. See docs/DEPLOIEMENT.md.
 name: sentinel-x
 
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: '3' }
+
+x-after-init: &after-init
+  init:
+    condition: service_completed_successfully
+
 services:
+  # One-shot: PKI and secrets in named volumes, CA certificate exported to deploy/runtime/.
+  init:
+    build: ./deploy/init
+    restart: 'no'
+    environment:
+      PUBLIC_HOSTS: ${PUBLIC_HOSTS:-localhost}
+      INITIAL_ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sentinel-x.local}
+    volumes:
+      - pki:/run/sentinel/pki
+      - secrets:/run/sentinel/secrets
+      - ./deploy/runtime:/export
+      - ./deploy/mosquitto/acl:/templates/mosquitto-acl:ro
+    network_mode: none
+    <<: *hardening
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    tmpfs: [/tmp]
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    depends_on: *after-init
+    user: '1883:1883'
+    command: ['mosquitto', '-c', '/mosquitto/config/mosquitto.conf']
+    volumes:
+      - ./deploy/mosquitto:/mosquitto/config:ro
+      - pki:/run/sentinel/pki:ro
+      - secrets:/run/sentinel/secrets:ro
+    ports:
+      - 127.0.0.1:${MQTT_TLS_PORT:-8883}:8883
+    networks: [core, mqtt-host]
+    <<: *hardening
+    tmpfs: [/tmp]
+
   backend:
     build: ./iot-backend
     restart: unless-stopped
+    depends_on: *after-init
     environment:
-      PORT: 3001
-      MQTT_URL: ${MQTT_URL:-mqtt://host.docker.internal:1883}
-      MQTT_TELEMETRY_TOPIC: esp8266/donnees
-      MQTT_COMMAND_TOPIC: esp8266/led
-      MQTT_VISION_TOPIC: ${MQTT_VISION_TOPIC:-sentinel/vision}
-      # Optional Python service on the local server; empty preserves web-only operation.
-      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
-      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
-      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-5000}
-      AI_POLL_MS: ${AI_POLL_MS:-2000}
-      # Flux MJPEG du script vision de l'equipe IA (relaye derriere l'authentification).
-      VISION_STREAM_URL: ${VISION_STREAM_URL:-}
+      NODE_EXTRA_CA_CERTS: /run/sentinel/pki/ca.crt
+      TLS_CERT_FILE: /run/sentinel/pki/backend.crt
+      TLS_KEY_FILE: /run/sentinel/pki/backend.key
+      HEALTHCHECK_URL: https://localhost:3001/api/health
+      PUBLIC_HOSTS: localhost,127.0.0.1,${PUBLIC_HOSTS:-localhost}
+      PUBLIC_HTTPS_PORT: ${HTTPS_PORT:-443}
+      BETTER_AUTH_SECRET_FILE: /run/sentinel/secrets/auth-secret
+      INITIAL_ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sentinel-x.local}
+      INITIAL_ADMIN_PASSWORD_FILE: /run/sentinel/secrets/initial-admin-password
+      # Only nginx, on the edge network, may report the client IP.
+      TRUST_PROXY: 172.30.10.0/24
+      MQTT_URL: mqtts://mosquitto:8883
+      MQTT_USERNAME: backend
+      MQTT_PASSWORD_FILE: /run/sentinel/secrets/mqtt-backend-password
+      AI_SERVICE_URL: https://ai:8001
+      AI_SERVICE_TOKEN_FILE: /run/sentinel/secrets/ai-token
       READINGS_RETENTION_DAYS: ${READINGS_RETENTION_DAYS:-7}
-      # Notifications par e-mail (SMTP). Sans SMTP_HOST, aucun e-mail n'est envoye.
+      # Optional e-mail notifications (STARTTLS required unless SMTP_SECURE=true).
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-SENTINEL-X <sentinel-x@localhost>}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Definir BETTER_AUTH_SECRET dans .env}
-      BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
-      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
-      # Seul nginx, sur le reseau interne, peut transmettre l'IP du client.
-      TRUST_PROXY: 172.30.10.0/24
     volumes:
-      # Comptes (auth.db), historique des capteurs (telemetry.db) et parametres (settings.db).
       - backend-data:/app/data
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    networks:
-      - web
-    # Pas de port publie : l'API n'est joignable qu'a travers nginx.
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+      - pki:/run/sentinel/pki:ro
+      - secrets:/run/sentinel/secrets:ro
+    # edge: nginx and outgoing SMTP; core: broker and AI (no Internet).
+    networks: [edge, core]
+    <<: *hardening
+    tmpfs: [/tmp]
 
   frontend:
     build: ./iot-frontend
     restart: unless-stopped
     depends_on:
+      <<: *after-init
       backend:
         condition: service_healthy
+    environment:
+      HTTPS_PORT: ${HTTPS_PORT:-443}
+    volumes:
+      - pki:/run/sentinel/pki:ro
     ports:
-      - ${WEB_PORT:-8080}:8080
-    networks:
-      - web
-    read_only: true
+      - ${HTTP_PORT:-80}:8080
+      - ${HTTPS_PORT:-443}:8443
+    networks: [edge]
+    <<: *hardening
     tmpfs:
       - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
+
+  ai:
+    build: ./ai
+    restart: unless-stopped
+    depends_on: *after-init
+    environment:
+      AI_PORT: 8001
+      AI_TLS_CERT_FILE: /run/sentinel/pki/ai.crt
+      AI_TLS_KEY_FILE: /run/sentinel/pki/ai.key
+      AI_TLS_CA_FILE: /run/sentinel/pki/ca.crt
+      AI_SERVICE_TOKEN_FILE: /run/sentinel/secrets/ai-token
+      VISION_CAMERA_INDEX: ${VISION_CAMERA_INDEX:-0}
+      VISION_AUTO_START: ${VISION_AUTO_START:-false}
+    volumes:
+      - ai-state:/app/state
+      - ai-faces:/app/known_faces
+      - pki:/run/sentinel/pki:ro
+      - secrets:/run/sentinel/secrets:ro
+      # USB webcam: hot-plug through /dev, access limited to video devices (major 81).
+      - /dev:/dev:ro
+    device_cgroup_rules: ['c 81:* rmw']
+    group_add: [video]
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import ssl, urllib.request as u; u.urlopen('https://localhost:8001/health', timeout=3, context=ssl.create_default_context(cafile='/run/sentinel/pki/ca.crt'))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+    networks: [core]
+    <<: *hardening
+    tmpfs: [/tmp]
+
+  bridge:
+    build:
+      context: ./scripts
+      dockerfile: bridge.Dockerfile
+    restart: unless-stopped
+    depends_on: *after-init
+    command:
+      - --mqtt-host=mosquitto
+      - --mqtt-port=8883
+      - --mqtt-ca=/run/sentinel/pki/ca.crt
+      - --mqtt-username=bridge
+      - --mqtt-password-file=/run/sentinel/secrets/mqtt-bridge-password
+    volumes:
+      - pki:/run/sentinel/pki:ro
+      - secrets:/run/sentinel/secrets:ro
+      # ESP8266 over USB: hot-plug through /dev, access limited to serial devices
+      # (ttyUSB major 188, ttyACM major 166). It waits until a board is plugged in.
+      - /dev:/dev:ro
+    device_cgroup_rules: ['c 188:* rmw', 'c 166:* rmw']
+    group_add: [dialout]
+    networks: [core]
+    <<: *hardening
+    tmpfs: [/tmp]
 
 networks:
-  web:
+  edge:
     ipam:
       config:
         - subnet: 172.30.10.0/24
+  core:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24
+  # Only used to publish the broker on 127.0.0.1 for a bridge running on the host.
+  mqtt-host:
+    ipam:
+      config:
+        - subnet: 172.30.30.0/24
 
 volumes:
+  pki:
+  secrets:
   backend-data:
+  ai-state:
+  ai-faces:

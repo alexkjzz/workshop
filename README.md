@@ -28,6 +28,8 @@ Les documentations techniques et d'utilisation des quatre projets sont dans
 | Dashboard `iot-frontend` | `Sentinel-X_Frontend_Documentation-technique.pdf` | `Sentinel-X_Frontend_Guide-utilisation.pdf` |
 | Service IA `ai` | `Sentinel-X_IA_Documentation-technique.pdf` | `Sentinel-X_IA_Guide-utilisation.pdf` |
 
+Deploiement securise en production : `Sentinel-X_Guide-deploiement.pdf`.
+
 Les sources HTML, la feuille de style d'impression et les captures sont dans
 [`docs/pdf-src/`](docs/pdf-src/). Apres une evolution du code, mettre a jour la
 source concernee puis regenerer les PDF (Chrome, Edge ou Chromium requis ;
@@ -431,32 +433,30 @@ Les notifications sont uniquement envoyees par e-mail.
   dans `.runtime/mail/` (fichiers `.eml`, lisibles avec un client mail).
 - Les parametres sont stockes dans `iot-backend/data/settings.db`.
 
-## Docker
+## Docker (production)
 
-Le backend et le frontend sont conteneurises (`iot-backend/Dockerfile`,
-`iot-frontend/Dockerfile`) et orchestres par `docker-compose.yml`. Le frontend
-est servi par nginx, qui relaie `/api` vers le backend : seul le port web est
-publie, l'API n'est pas joignable directement.
+Deploiement securise en une commande, sans fichier a remplir : voir
+[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) et le
+[guide de deploiement PDF](docs/pdf/Sentinel-X_Guide-deploiement.pdf).
 
 ```sh
-cp .env.example .env        # puis renseigner BETTER_AUTH_SECRET (openssl rand -base64 32)
+echo "PUBLIC_HOSTS=192.168.10.1" > .env      # adresse du serveur (recommande)
 docker compose up -d --build
-docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.test "Operateur"
+docker compose exec backend cat /run/sentinel/secrets/initial-admin-password
 ```
 
-- Dashboard : http://localhost:8080 (port `WEB_PORT`). Pour un acces depuis le
-  reseau de table, ajouter l'URL (ex. `http://192.168.10.1:8080`) a
-  `FRONTEND_ORIGINS` et la definir comme `PUBLIC_URL`.
-- Le broker MQTT n'est pas inclus : `MQTT_URL` pointe par defaut sur le
-  Mosquitto de l'hote (`host.docker.internal:1883`).
-- Les comptes et l'historique des capteurs sont conserves dans le volume
-  `backend-data`.
-- `VISION_STREAM_URL` et `MQTT_VISION_TOPIC` raccordent le script vision de
-  l'equipe IA (voir [Camera](#camera-et-reconnaissance-faciale)).
-- Durcissement : processus non-root, systeme de fichiers en lecture seule,
-  capacites Linux retirees, `no-new-privileges`, en-tetes de securite nginx
-  (CSP, `X-Frame-Options`, `nosniff`). Le backend ne fait confiance a
-  `X-Forwarded-For` que depuis le sous-reseau interne `172.30.10.0/24` (nginx).
+- Le service `init` cree l'autorite de certification locale, un certificat par
+  service et tous les secrets (session, jeton IA, comptes MQTT, administrateur
+  initial), sans jamais ecraser l'existant. Le certificat public de la CA est
+  exporte dans `deploy/runtime/sentinel-x-ca.crt` pour les navigateurs.
+- Toutes les liaisons sont chiffrees : HTTPS (TLS 1.2/1.3, HSTS) jusqu'a nginx
+  puis jusqu'au backend, MQTTS authentifie avec ACL pour le backend et la
+  passerelle USB, HTTPS + jeton vers le service IA.
+- Seuls les ports 80 (redirection) et 443 sont publies ; Mosquitto ecoute sur
+  `127.0.0.1:8883` pour une passerelle lancee hors Docker. Broker, IA et
+  passerelle sont sur un reseau interne sans Internet.
+- Conteneurs non-root, en lecture seule, sans capacites Linux, journaux limites.
+  Le boitier USB et la webcam sont detectes a chaud (Linux).
 
 ## Avec Un Vrai ESP8266
 

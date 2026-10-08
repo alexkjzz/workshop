@@ -1,4 +1,6 @@
 // Composition root: the only place that knows every concrete implementation.
+import { readFileSync } from 'node:fs';
+import { createServer } from 'node:https';
 import { AlertDetector } from './application/alert-detector.js';
 import { AiCoordinator } from './application/ai-coordinator.js';
 import { DeviceState } from './application/device-state.js';
@@ -21,6 +23,7 @@ import {
   BetterAuthSessionVerifier,
   createAuth,
   createAuthHandler,
+  ensureInitialAdmin,
 } from './infrastructure/auth/better-auth.js';
 import { HttpCameraFeed } from './infrastructure/camera/http-camera-feed.js';
 import { HttpAiGateway } from './infrastructure/ai/http-ai-gateway.js';
@@ -70,6 +73,7 @@ const gateway = new MqttDeviceGateway(
     onTelemetry: (measurement) => recordTelemetry.execute(measurement),
     onDetection: (detection) => recordDetection.execute(detection),
   },
+  { username: config.mqttUsername, password: config.mqttPassword },
 );
 
 // E-mail notifications: alerts raised by live events and by the box's silence.
@@ -97,6 +101,7 @@ prune();
 const pruneTimer = setInterval(prune, PRUNE_INTERVAL_MS);
 
 const auth = await createAuth();
+await ensureInitialAdmin(config.initialAdmin.email, config.initialAdmin.passwordFile);
 const app = createHttpApp({
   useCases: {
     getDeviceStatus: new GetDeviceStatus(deviceState, gateway),
@@ -117,9 +122,17 @@ const app = createHttpApp({
   trustProxy: config.trustProxy,
 });
 
-const server = app.listen(config.port, () => {
-  console.info(`HTTP server listening on http://localhost:${config.port}.`);
-});
+// HTTPS when a certificate is configured (production), plain HTTP for local development.
+const server = config.tls.certFile
+  ? createServer(
+      { cert: readFileSync(config.tls.certFile), key: readFileSync(config.tls.keyFile), minVersion: 'TLSv1.2' },
+      app,
+    ).listen(config.port, () => {
+      console.info(`HTTPS server listening on https://localhost:${config.port}.`);
+    })
+  : app.listen(config.port, () => {
+      console.info(`HTTP server listening on http://localhost:${config.port}.`);
+    });
 
 function shutdown(signal: string) {
   console.info(`Received ${signal}; shutting down.`);

@@ -213,7 +213,8 @@ python -m app.anomaly.trainer --csv data/normal_validated.csv --output models/is
   <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
   <tbody>
     <tr><td><code>AI_HOST</code> / <code>AI_PORT</code></td><td>127.0.0.1 / 8001</td><td>Adresse d'écoute (locale uniquement)</td></tr>
-    <tr><td><code>AI_SERVICE_TOKEN</code></td><td>vide</td><td>Jeton partagé avec le backend</td></tr>
+    <tr><td><code>AI_SERVICE_TOKEN</code> / <code>AI_SERVICE_TOKEN_FILE</code></td><td>vide</td><td>Jeton partagé avec le backend (le fichier est prioritaire)</td></tr>
+    <tr><td><code>AI_TLS_CERT_FILE</code> / <code>AI_TLS_KEY_FILE</code> / <code>AI_TLS_CA_FILE</code></td><td>vide</td><td>Servir en HTTPS (production) ; CA pour le contrôle d'instance</td></tr>
     <tr><td><code>ANOMALY_MODEL</code></td><td>models/isolation_forest.joblib</td><td>Artefact du modèle</td></tr>
     <tr><td><code>ANOMALY_WINDOW</code> / <code>ANOMALY_CONTAMINATION</code></td><td>12 / 0.03</td><td>Fenêtre des features, contamination à l'entraînement</td></tr>
     <tr><td><code>SENSOR_STALE_SECONDS</code> / <code>VISION_STALE_SECONDS</code></td><td>30 / 5</td><td>Fraîcheur des preuves</td></tr>
@@ -230,7 +231,8 @@ python -m app.anomaly.trainer --csv data/normal_validated.csv --output models/is
 
 <h2 id="securite"><span class="num">9</span> Sécurité, robustesse, performances</h2>
 <ul>
-  <li><strong>Exposition</strong> : écoute sur la boucle locale. Si <code>AI_SERVICE_TOKEN</code> est défini, toutes les routes sauf <code>/</code> et <code>/health</code> exigent <code>Authorization: Bearer</code>. Le jeton reste côté serveur.</li>
+  <li><strong>Exposition</strong> : écoute sur la boucle locale en développement. En production Docker, le service écoute en HTTPS sur le réseau interne <code>core</code> (sans accès Internet, non publié), avec un jeton généré au déploiement. Si un jeton est défini, toutes les routes sauf <code>/</code> et <code>/health</code> exigent <code>Authorization: Bearer</code>. Le jeton reste côté serveur.</li>
+  <li><strong>Image Docker</strong> : PyTorch en version CPU, poids YOLOv8n vérifiés par empreinte SHA-256 et modèles YuNet/SFace intégrés à la construction ; utilisateur non-root, système de fichiers en lecture seule ; modèle entraîné et catalogue facial dans des volumes ; webcam accessible par règle de périphériques vidéo uniquement.</li>
   <li><strong>Artefacts</strong> : joblib et YOLO désérialisent du code ; ne charger que des fichiers locaux de confiance. Le service n'installe ni ne télécharge rien en production.</li>
   <li><strong>Démarrage</strong> : le port est réservé avant le chargement des modèles. Une instance Sentinel-X déjà active est détectée (message, code 0, pas de second accès à la webcam) ; un port occupé par un autre service produit une erreur explicite.</li>
   <li><strong>Pannes</strong> : modèle absent (résultats <code>null</code>, statut explicite), webcam absente ou retirée (<code>unavailable</code>), YOLO absent (vidéo brute). Le backend continue de fonctionner sans le service IA.</li>

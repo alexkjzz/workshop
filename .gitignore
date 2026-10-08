@@ -11,6 +11,7 @@ certs/
 
 # Runtime, private databases, logs and captured sensor data
 .runtime/
+deploy/runtime/
 *.db
 *.db-*
 *.sqlite

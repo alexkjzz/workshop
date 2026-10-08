@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Guide de déploiement sécurisé</title>
+<meta name="pdf-name" content="Sentinel-X_Guide-deploiement.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Guide de déploiement</div>
+  <h1 class="outline-title">Déploiement sécurisé en production</h1>
+  <div class="cover-title" aria-hidden="true">Déploiement sécurisé en production</div>
+  <p class="cover-subtitle">Une commande pour déployer toute la plateforme sur le PC Serveur Local : TLS sur chaque liaison, secrets et certificats générés automatiquement, services isolés.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Public</dt><dd>Équipe infrastructure et cybersécurité, administrateurs du serveur</dd>
+    <dt>Cible</dt><dd>Linux 64 bits (Raspberry Pi OS 64 bits sur Raspberry Pi 5, Debian, Ubuntu) avec Docker</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#apercu">En bref<span>Ce que fait la commande de déploiement</span></a></li>
+    <li><a href="#architecture">Architecture sécurisée<span>Services, réseaux, protocoles</span></a></li>
+    <li><a href="#prerequis">Prérequis<span>Matériel, système, Docker</span></a></li>
+    <li><a href="#deployer">Déployer<span>Installation en quatre étapes</span></a></li>
+    <li><a href="#acces">Premier accès<span>Certificat, administrateur, comptes</span></a></li>
+    <li><a href="#materiel">Brancher le matériel<span>Boîtier USB et webcam</span></a></li>
+    <li><a href="#configuration">Personnaliser<span>Fichier .env facultatif</span></a></li>
+    <li><a href="#securite">Mesures de sécurité<span>Matrice et vérifications réalisées</span></a></li>
+    <li><a href="#hote">Durcir le serveur<span>Pare-feu, SSH, mises à jour</span></a></li>
+    <li><a href="#exploitation">Exploiter<span>Supervision, mises à jour, sauvegardes, IA</span></a></li>
+    <li><a href="#desktop">Windows et macOS<span>Docker Desktop et matériel</span></a></li>
+    <li><a href="#depannage">Dépannage<span>Problèmes fréquents</span></a></li>
+  </ol>
+</section>
+
+<h2 id="apercu" style="margin-top:0"><span class="num">1</span> En bref</h2>
+<pre><code>git clone &lt;dépôt&gt; sentinel-x &amp;&amp; cd sentinel-x
+docker compose up -d --build</code></pre>
+<p>Cette seule commande, <strong>sans fichier de configuration</strong>, déploie la plateforme complète :</p>
+<ul>
+  <li>une <strong>autorité de certification locale</strong> et un certificat TLS par service ;</li>
+  <li>tous les <strong>secrets</strong> : clé de session, jeton du service IA, mots de passe MQTT, mot de passe du premier administrateur ;</li>
+  <li>le <strong>dashboard en HTTPS</strong> (le HTTP redirige vers HTTPS), le backend, le broker MQTT, le service IA et la passerelle USB du boîtier ;</li>
+  <li>le <strong>compte administrateur initial</strong>, créé au premier démarrage.</li>
+</ul>
+<p>Aucune donnée sensible n'est stockée dans le dépôt ni dans un fichier à compléter. Relancer la commande conserve la CA et les secrets existants ; les certificats sont renouvelés automatiquement 30 jours avant leur expiration.</p>
+
+<h2 id="architecture"><span class="num">2</span> Architecture sécurisée</h2>
+<figure class="diagram">
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#17804a"/></marker></defs>
+  <rect x="150" y="10" width="600" height="300" rx="12" fill="#f4f6fa" stroke="#c9d1de" stroke-dasharray="5 4"/>
+  <text x="162" y="30" font-size="10" fill="#5b6575" font-weight="700">PC Serveur Local — Docker</text>
+  <rect x="300" y="40" width="200" height="74" rx="10" fill="#fff" stroke="#9fb7ee"/>
+  <text x="312" y="56" font-size="9.5" fill="#1f4fae" font-weight="700">Réseau edge 172.30.10.0/24</text>
+  <rect x="380" y="168" width="360" height="96" rx="10" fill="#fff" stroke="#c98a8a"/>
+  <text x="392" y="242" font-size="9.5" fill="#b42c2c" font-weight="700">Réseau core (sans Internet)</text><text x="392" y="255" font-size="9" fill="#b42c2c">172.30.20.0/24</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="50" width="110" height="54" rx="8" fill="#fff" stroke="#c9d1de"/><text x="65" y="73" font-weight="700" fill="#142033">Navigateur</text><text x="65" y="89" font-size="9" fill="#5b6575">opérateur</text>
+    <rect x="10" y="200" width="110" height="54" rx="8" fill="#fff" stroke="#c9d1de"/><text x="65" y="223" font-weight="700" fill="#142033">ESP8266</text><text x="65" y="239" font-size="9" fill="#5b6575">USB série</text>
+    <rect x="315" y="62" width="80" height="44" rx="7" fill="#2b62d9"/><text x="355" y="82" font-weight="700" fill="#fff">nginx</text><text x="355" y="97" font-size="8.5" fill="#dbe6ff">80 → 443</text>
+    <rect x="410" y="62" width="80" height="44" rx="7" fill="#2b62d9"/><text x="450" y="82" font-weight="700" fill="#fff">backend</text><text x="450" y="97" font-size="8.5" fill="#dbe6ff">HTTPS 3001</text>
+    <rect x="475" y="180" width="80" height="44" rx="7" fill="#2b62d9"/><text x="515" y="200" font-weight="700" fill="#fff">mosquitto</text><text x="515" y="215" font-size="8.5" fill="#dbe6ff">MQTTS 8883</text>
+    <rect x="565" y="180" width="80" height="44" rx="7" fill="#2b62d9"/><text x="605" y="200" font-weight="700" fill="#fff">ai</text><text x="605" y="215" font-size="8.5" fill="#dbe6ff">HTTPS 8001</text>
+    <rect x="655" y="180" width="75" height="44" rx="7" fill="#2b62d9"/><text x="692" y="200" font-weight="700" fill="#fff">bridge</text><text x="692" y="215" font-size="8.5" fill="#dbe6ff">USB → MQTTS</text>
+    <rect x="565" y="272" width="80" height="24" rx="6" fill="#fff" stroke="#c9d1de"/><text x="605" y="288" font-size="9.5" fill="#142033">webcam USB</text>
+    <rect x="170" y="200" width="110" height="54" rx="8" fill="#fff" stroke="#c9d1de" stroke-dasharray="4 3"/><text x="225" y="223" font-weight="700" fill="#142033">init</text><text x="225" y="239" font-size="9" fill="#5b6575">CA, certificats, secrets</text>
+  </g>
+  <g stroke="#17804a" stroke-width="1.8" fill="none" marker-end="url(#e1)">
+    <line x1="120" y1="77" x2="313" y2="80"/>
+    <line x1="395" y1="84" x2="408" y2="84"/>
+    <polyline points="440,106 440,150 505,150 505,178"/>
+    <polyline points="470,106 470,128 605,128 605,178"/>
+    <polyline points="700,180 700,158 540,158 540,178"/>
+    <polyline points="120,227 150,227 150,304 718,304 718,226"/>
+    <line x1="605" y1="272" x2="605" y2="226"/>
+  </g>
+  <g font-size="9" fill="#17804a" font-weight="700">
+    <text x="190" y="70">HTTPS (TLS 1.2/1.3)</text>
+    <text x="435" y="146" text-anchor="end">MQTTS + compte + ACL</text>
+    <text x="612" y="124">HTTPS + jeton</text>
+    <text x="650" y="154" text-anchor="end">MQTTS</text>
+    <text x="330" y="300">USB (/dev/ttyUSB*, seul matériel série autorisé)</text>
+  </g>
+</svg>
+<figcaption><b>Figure 1.</b> Chaque liaison réseau est chiffrée et authentifiée. Seuls les ports 80 (redirection) et 443 sont publiés.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Service</th><th>Rôle</th><th>Utilisateur</th><th>Exposition</th></tr></thead>
+  <tbody>
+    <tr><td><code>init</code></td><td>Crée la CA, les certificats et les secrets, puis s'arrête</td><td>root, sans réseau</td><td>aucune</td></tr>
+    <tr><td><code>frontend</code></td><td>nginx : dashboard, HTTPS, redirection, relais vers le backend</td><td>101</td><td>ports 80 et 443</td></tr>
+    <tr><td><code>backend</code></td><td>API, authentification, SQLite, temps réel, notifications</td><td>1000</td><td>aucune (via nginx)</td></tr>
+    <tr><td><code>mosquitto</code></td><td>Broker MQTT, TLS uniquement</td><td>1883</td><td><code>127.0.0.1:8883</code> seulement</td></tr>
+    <tr><td><code>ai</code></td><td>Analyse IA, webcam, reconnaissance faciale</td><td>10001</td><td>aucune</td></tr>
+    <tr><td><code>bridge</code></td><td>Passerelle USB du boîtier vers MQTT</td><td>10002</td><td>aucune</td></tr>
+  </tbody>
+</table>
+
+<h2 id="prerequis"><span class="num">3</span> Prérequis</h2>
+<ul>
+  <li><strong>Serveur</strong> : Raspberry Pi 5 (4 Go de RAM minimum) sous Raspberry Pi OS 64 bits, ou PC Linux 64 bits (Debian 12, Ubuntu 22.04 ou plus récent).</li>
+  <li><strong>Espace disque</strong> : 10 Go libres (l'image IA pèse environ 2,7 Go).</li>
+  <li><strong>Docker Engine</strong> 24 ou plus récent, avec le plugin <code>docker compose</code>.</li>
+  <li><strong>Internet pour la première construction uniquement</strong> : dépendances et modèles (YOLOv8n, YuNet, SFace) sont téléchargés puis vérifiés par empreinte SHA-256. Ensuite, la plateforme fonctionne hors ligne.</li>
+  <li>Le boîtier ESP8266 flashé avec le firmware du dépôt (voir le guide du firmware) et, pour la vision, une webcam USB.</li>
+</ul>
+<pre><code># Installation de Docker (Raspberry Pi OS, Debian, Ubuntu)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # puis se reconnecter</code></pre>
+
+<h2 id="deployer"><span class="num">4</span> Déployer</h2>
+<ol class="steps">
+  <li><strong>Récupérer le projet</strong> sur le serveur :
+<pre><code>git clone &lt;url-du-dépôt&gt; /opt/sentinel-x
+cd /opt/sentinel-x</code></pre></li>
+  <li><strong>Déclarer l'adresse du serveur</strong> (recommandé) : pour accéder au dashboard depuis les autres postes de la table, indiquez son adresse IP ou son nom. Elle sera incluse dans le certificat HTTPS :
+<pre><code>echo "PUBLIC_HOSTS=192.168.10.1" &gt; .env</code></pre>
+  Sans cette étape, le dashboard n'est accessible que depuis le serveur lui-même (<code>https://localhost</code>).</li>
+  <li><strong>Lancer</strong> la plateforme. La première construction dure de 10 à 30 minutes selon la connexion et le matériel :
+<pre><code>docker compose up -d --build</code></pre></li>
+  <li><strong>Vérifier</strong> que tous les services sont démarrés et sains :
+<pre><code>docker compose ps</code></pre>
+  <code>init</code> doit être <em>Exited (0)</em> ; <code>frontend</code>, <code>backend</code> et <code>ai</code> doivent être <em>healthy</em> ; <code>mosquitto</code> et <code>bridge</code>, <em>Up</em>.</li>
+</ol>
+<div class="note"><p>Les services redémarrent automatiquement après une coupure de courant ou un redémarrage du serveur (<code>restart: unless-stopped</code>), à condition que Docker démarre avec le système (<code>sudo systemctl enable docker</code>).</p></div>
+
+<h2 id="acces"><span class="num">5</span> Premier accès</h2>
+<h3>5.1 Faire confiance au certificat</h3>
+<p>Les certificats sont signés par une autorité locale créée au premier démarrage. Le certificat public de cette autorité est exporté dans <code>deploy/runtime/sentinel-x-ca.crt</code>. Installez-le sur chaque poste qui consultera le dashboard ; sinon, le navigateur affichera un avertissement de sécurité.</p>
+<table>
+  <thead><tr><th>Système</th><th>Installation de <code>sentinel-x-ca.crt</code></th></tr></thead>
+  <tbody>
+    <tr><td>Windows</td><td>Double-clic → Installer le certificat → Ordinateur local → « Autorités de certification racines de confiance »</td></tr>
+    <tr><td>macOS</td><td>Double-clic → Trousseau Système → ouvrir le certificat → Se fier : « Toujours approuver »</td></tr>
+    <tr><td>Linux (Chrome)</td><td>Paramètres → Confidentialité et sécurité → Gérer les certificats → Autorités → Importer</td></tr>
+    <tr><td>Firefox (tous systèmes)</td><td>Paramètres → Vie privée et sécurité → Certificats → Autorités → Importer</td></tr>
+    <tr><td>Android</td><td>Paramètres → Sécurité → Chiffrement et identifiants → Installer un certificat → Certificat CA</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>Ne partagez que <code>sentinel-x-ca.crt</code> : c'est un certificat public. La clé privée de l'autorité ne quitte jamais le volume Docker <code>pki</code>.</p></div>
+<h3>5.2 Se connecter en administrateur</h3>
+<p>Récupérez le mot de passe généré pour l'administrateur initial (<code>admin@sentinel-x.local</code> par défaut) :</p>
+<pre><code>docker compose exec backend cat /run/sentinel/secrets/initial-admin-password</code></pre>
+<p>Ouvrez <code>https://192.168.10.1</code> (ou <code>https://localhost</code> sur le serveur) et connectez-vous.</p>
+<h3>5.3 Créer les comptes des opérateurs</h3>
+<pre><code>docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.fr "Prénom Nom"</code></pre>
+<p>Le mot de passe (12 caractères minimum) est demandé deux fois, sans affichage. Créez un compte nominatif par personne : chaque commande et chaque modification de paramètre est journalisée avec l'e-mail de son auteur.</p>
+
+<h2 id="materiel"><span class="num">6</span> Brancher le matériel</h2>
+<p>Le matériel se branche <strong>à chaud</strong>, avant ou après le démarrage, sans aucune configuration :</p>
+<ul>
+  <li><strong>Boîtier ESP8266</strong> : branchez-le en USB. Le service <code>bridge</code> détecte l'unique port USB série (<code>/dev/ttyUSB*</code> ou <code>/dev/ttyACM*</code>) et transmet les mesures en MQTTS. Débranchement et rebranchement sont gérés automatiquement.</li>
+  <li><strong>Webcam</strong> : branchez-la en USB, puis cliquez sur <strong>Démarrer la webcam</strong> dans la page Caméra du dashboard. Si plusieurs caméras sont présentes, indiquez <code>VISION_CAMERA_INDEX</code> dans <code>.env</code>.</li>
+</ul>
+<pre><code>docker compose logs -f bridge     # « Port /dev/ttyUSB0 ouvert » puis « MQTT #… »
+docker compose logs -f ai         # état de la webcam et des analyses</code></pre>
+<p>Les conteneurs n'ont accès qu'aux classes de périphériques nécessaires : ports série pour <code>bridge</code>, caméras vidéo pour <code>ai</code>, selon des règles de cgroup. Aucun conteneur n'est privilégié.</p>
+
+<h2 id="configuration"><span class="num">7</span> Personnaliser</h2>
+<p>Toutes les valeurs ont un défaut fonctionnel. Pour en changer une, créez un fichier <code>.env</code> à partir de <code>.env.example</code>, puis relancez <code>docker compose up -d</code>.</p>
+<table>
+  <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>PUBLIC_HOSTS</code></td><td>localhost</td><td>Adresses et noms du serveur (liste séparée par des virgules) : certificat HTTPS et origines autorisées</td></tr>
+    <tr><td><code>HTTP_PORT</code> / <code>HTTPS_PORT</code></td><td>80 / 443</td><td>Ports publiés</td></tr>
+    <tr><td><code>ADMIN_EMAIL</code></td><td>admin@sentinel-x.local</td><td>Identifiant de l'administrateur initial</td></tr>
+    <tr><td><code>READINGS_RETENTION_DAYS</code></td><td>7</td><td>Conservation des mesures et analyses</td></tr>
+    <tr><td><code>VISION_CAMERA_INDEX</code> / <code>VISION_AUTO_START</code></td><td>0 / false</td><td>Choix et démarrage automatique de la webcam</td></tr>
+    <tr><td><code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_SECURE</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>MAIL_FROM</code></td><td>désactivé</td><td>Notifications par e-mail (STARTTLS exigé)</td></tr>
+    <tr><td><code>MQTT_TLS_PORT</code></td><td>8883</td><td>Port du broker sur <code>127.0.0.1</code>, pour une passerelle lancée hors Docker</td></tr>
+  </tbody>
+</table>
+<p>Après un changement de <code>PUBLIC_HOSTS</code>, le certificat HTTPS est régénéré automatiquement au prochain <code>up</code>. Le réseau de table n'ayant pas Internet, les notifications nécessitent un serveur SMTP joignable depuis le serveur.</p>
+
+<h2 id="securite"><span class="num">8</span> Mesures de sécurité</h2>
+<table>
+  <thead><tr><th>Liaison</th><th>Protocole</th><th>Authentification</th></tr></thead>
+  <tbody>
+    <tr><td>Navigateur → nginx</td><td>HTTPS, TLS 1.2/1.3, HSTS ; HTTP redirigé</td><td>Session Better Auth (cookie <code>__Secure-</code>, HttpOnly, Secure)</td></tr>
+    <tr><td>nginx → backend</td><td>HTTPS, certificat vérifié par la CA</td><td>Réseau interne, IP client de confiance limitée à nginx</td></tr>
+    <tr><td>backend → mosquitto</td><td>MQTTS (TLS), nom d'hôte vérifié</td><td>Compte <code>backend</code>, ACL lecture télémétrie / écriture commandes</td></tr>
+    <tr><td>bridge → mosquitto</td><td>MQTTS (TLS), nom d'hôte vérifié</td><td>Compte <code>bridge</code>, ACL écriture télémétrie uniquement</td></tr>
+    <tr><td>backend → ai</td><td>HTTPS, certificat vérifié</td><td>Jeton Bearer partagé</td></tr>
+    <tr><td>ESP8266 → bridge</td><td>USB local</td><td>Accès physique au serveur</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>Cryptographie</strong> : clés ECDSA P-256 ; suites ECDHE avec AES-GCM ou ChaCha20 ; TLS 1.0/1.1 refusés ; certificats de 397 jours renouvelés automatiquement.</li>
+  <li><strong>Secrets</strong> : générés aléatoirement (96 bits pour le mot de passe administrateur initial, 192 à 256 bits pour les autres), un propriétaire par fichier, permissions <code>0400</code>, lus via des variables <code>*_FILE</code>. Ils n'apparaissent ni dans le dépôt, ni dans <code>.env</code>, ni dans <code>docker inspect</code>. Seul un mot de passe SMTP saisi dans <code>.env</code> est passé en variable d'environnement : réservez <code>.env</code> à l'administrateur (<code>chmod 600 .env</code>).</li>
+  <li><strong>Conteneurs</strong> : utilisateurs non-root distincts, système de fichiers en lecture seule, toutes les capacités Linux retirées, <code>no-new-privileges</code>, journaux limités (3 × 10 Mo).</li>
+  <li><strong>Réseau</strong> : broker, IA et passerelle sur un réseau interne sans accès Internet ; backend et IA non publiés.</li>
+  <li><strong>Application</strong> : inscription publique désactivée, mots de passe de 12 caractères minimum, 5 tentatives de connexion par minute et par IP, origines vérifiées. Côté nginx : limites de débit et de connexions par IP, CSP stricte, <code>X-Frame-Options: DENY</code>, <code>nosniff</code>.</li>
+</ul>
+<h3>Vérifications réalisées</h3>
+<p>Le déploiement a été testé depuis une installation vierge, sans fichier <code>.env</code>, avec la commande unique de la section 4 :</p>
+<table>
+  <thead><tr><th>Contrôle</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td>HTTP → HTTPS ; certificat validé par la CA locale</td><td><span class="pill ok">301 puis 200</span></td></tr>
+    <tr><td>TLS 1.0 et 1.1 proposés par un client</td><td><span class="pill ok">refusés</span> (alerte « protocol version »)</td></tr>
+    <tr><td>Accès API sans session / origine étrangère</td><td><span class="pill ok">401 / 403</span></td></tr>
+    <tr><td>Force brute avec <code>X-Forwarded-For</code> falsifié</td><td><span class="pill ok">bloquée</span> (429)</td></tr>
+    <tr><td>MQTT anonyme, mauvais mot de passe, en clair, CA non reconnue</td><td><span class="pill ok">refusés</span></td></tr>
+    <tr><td>Publication hors ACL (passerelle vers <code>esp8266/led</code>)</td><td><span class="pill ok">refusée</span> (code 135)</td></tr>
+    <tr><td>Lecture d'un secret d'un autre service</td><td><span class="pill ok">permission refusée</span></td></tr>
+    <tr><td>Accès Internet depuis le réseau interne</td><td><span class="pill ok">impossible</span></td></tr>
+    <tr><td>Backend (3001) et IA (8001) depuis l'hôte</td><td><span class="pill ok">fermés</span></td></tr>
+    <tr><td>Chaîne complète passerelle → MQTTS → backend → IA → dashboard</td><td><span class="pill ok">fonctionnelle</span></td></tr>
+    <tr><td>Nouveau <code>up</code> : CA et secrets</td><td><span class="pill ok">conservés</span></td></tr>
+  </tbody>
+</table>
+
+<h2 id="hote"><span class="num">9</span> Durcir le serveur</h2>
+<p>Docker protège les services ; le système hôte doit l'être aussi. Ces réglages s'appliquent une fois, en gardant une session ouverte pendant les tests SSH.</p>
+<ol class="steps">
+  <li><strong>SSH par clé uniquement</strong> : copiez votre clé (<code>ssh-copy-id</code>), vérifiez la connexion, puis dans <code>/etc/ssh/sshd_config</code> : <code>PasswordAuthentication no</code> et <code>PermitRootLogin no</code>, puis <code>sudo systemctl restart ssh</code>.</li>
+  <li><strong>Pare-feu</strong> :
+<pre><code>sudo apt install ufw
+sudo ufw default deny incoming
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable</code></pre></li>
+  <li><strong>Mises à jour</strong> : <code>sudo apt install unattended-upgrades</code>.</li>
+</ol>
+<div class="warn"><p>Les ports publiés par Docker contournent les règles UFW. La protection repose donc d'abord sur le fait que le Compose ne publie que 80 et 443, et Mosquitto uniquement sur <code>127.0.0.1</code>. N'ajoutez pas de port publié sans en mesurer l'exposition.</p></div>
+
+<h2 id="exploitation"><span class="num">10</span> Exploiter</h2>
+<h3>Supervision</h3>
+<pre><code>docker compose ps                    # état et santé des services
+docker compose logs -f backend       # journal d'un service
+docker stats                         # CPU et mémoire en temps réel</code></pre>
+<h3>Mettre à jour</h3>
+<pre><code>git pull
+docker compose up -d --build</code></pre>
+<p>Les données, comptes, certificats et secrets sont conservés dans les volumes.</p>
+<h3>Sauvegarder et restaurer</h3>
+<table>
+  <thead><tr><th>Volume</th><th>Contenu</th></tr></thead>
+  <tbody>
+    <tr><td><code>sentinel-x_backend-data</code></td><td>Comptes, historique des mesures et des analyses, paramètres</td></tr>
+    <tr><td><code>sentinel-x_ai-state</code> / <code>sentinel-x_ai-faces</code></td><td>Modèle d'anomalies entraîné / catalogue facial (données biométriques)</td></tr>
+    <tr><td><code>sentinel-x_pki</code> / <code>sentinel-x_secrets</code></td><td>Autorité de certification et secrets</td></tr>
+  </tbody>
+</table>
+<pre><code># Sauvegarde à froid d'un volume
+docker compose stop
+docker run --rm -v sentinel-x_backend-data:/data:ro -v "$PWD":/backup alpine \
+  tar czf /backup/backend-data.tgz -C /data .
+docker compose start</code></pre>
+<p>Restauration : extraire l'archive dans le volume vide (<code>tar xzf</code>), services arrêtés. Les sauvegardes de <code>pki</code>, <code>secrets</code> et <code>ai-faces</code> sont sensibles : chiffrez-les et stockez-les hors du serveur.</p>
+<h3>Entraîner le modèle d'anomalies</h3>
+<ol class="steps">
+  <li><strong>Exporter</strong> les mesures réelles (base en lecture seule) :
+<pre><code>mkdir -p entrainement
+docker compose run --rm --no-deps -u root \
+  -v sentinel-x_backend-data:/backend-data:ro -v "$PWD/entrainement":/export \
+  ai python -m app.integrations.backend_client \
+  --database /backend-data/telemetry.db --output /export/sensor_data.csv</code></pre></li>
+  <li><strong>Sélectionner</strong> les périodes normales dans <code>entrainement/normal_validated.csv</code> (voir le guide IA).</li>
+  <li><strong>Entraîner</strong>, puis recharger le service :
+<pre><code>docker compose run --rm --no-deps \
+  -v "$PWD/entrainement/normal_validated.csv":/import/normal.csv:ro \
+  ai python -m app.anomaly.trainer --csv /import/normal.csv \
+  --output /app/state/isolation_forest.joblib
+docker compose restart ai</code></pre></li>
+</ol>
+<h3>Régénérer les secrets</h3>
+<p>En cas de compromission : <code>docker compose down</code>, puis <code>docker volume rm sentinel-x_secrets</code> (et <code>sentinel-x_pki</code> pour changer d'autorité), et enfin <code>docker compose up -d</code>. Toutes les sessions sont invalidées. Les comptes existants sont conservés, et le nouveau mot de passe administrateur ne s'applique qu'à une base de comptes vide. Après un changement de CA, réinstallez <code>sentinel-x-ca.crt</code> sur les postes.</p>
+
+<h2 id="desktop"><span class="num">11</span> Windows et macOS</h2>
+<p>Docker Desktop fonctionne avec la même commande, mais ne transmet <strong>ni l'USB ni la webcam</strong> aux conteneurs. Le dashboard, le backend, le broker et l'analyse IA des capteurs fonctionnent ; la vision indique « Webcam introuvable ». Pour le boîtier, lancez la passerelle sur l'hôte en MQTTS :</p>
+<pre><code># Mot de passe du compte bridge
+docker compose run --rm --no-deps --entrypoint cat init /run/sentinel/secrets/mqtt-bridge-password &gt; bridge-password.txt
+
+.\ai\.venv\Scripts\python.exe scripts\esp_serial_bridge.py --mqtt-host localhost --mqtt-port 8883 `
+  --mqtt-ca deploy\runtime\sentinel-x-ca.crt --mqtt-username bridge --mqtt-password-file bridge-password.txt</code></pre>
+<p>Protégez <code>bridge-password.txt</code> (droits limités à votre compte) et arrêtez le service <code>bridge</code> du Compose (<code>docker compose stop bridge</code>), inutile dans ce cas. Pour la vision en production, utilisez un serveur Linux.</p>
+
+<h2 id="depannage"><span class="num">12</span> Dépannage</h2>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr></thead>
+  <tbody>
+    <tr><td>Avertissement de sécurité du navigateur</td><td>CA non installée, ou adresse absente de <code>PUBLIC_HOSTS</code></td><td>Installer <code>sentinel-x-ca.crt</code> ; ajouter l'adresse dans <code>.env</code> puis <code>docker compose up -d</code></td></tr>
+    <tr><td>Connexion refusée (403) depuis un autre poste</td><td>Origine non déclarée</td><td>Ajouter l'adresse utilisée à <code>PUBLIC_HOSTS</code></td></tr>
+    <tr><td>Construction de <code>ai</code> interrompue (« Read timed out »)</td><td>Réseau lent ou instable</td><td>Relancer <code>docker compose build ai</code> : les paquets déjà téléchargés sont en cache</td></tr>
+    <tr><td><code>bind: address already in use</code> sur 80/443</td><td>Autre serveur web actif</td><td>L'arrêter, ou changer <code>HTTP_PORT</code>/<code>HTTPS_PORT</code></td></tr>
+    <tr><td><code>bridge</code> : « 0 ports USB plausibles »</td><td>Boîtier non branché ou câble de charge seule</td><td>Brancher le boîtier avec un câble de données ; vérifier <code>ls /dev/ttyUSB*</code></td></tr>
+    <tr><td>Webcam introuvable</td><td>Caméra absente, occupée ou mauvais index</td><td>Vérifier <code>ls /dev/video*</code>, ajuster <code>VISION_CAMERA_INDEX</code></td></tr>
+    <tr><td>Mot de passe administrateur perdu</td><td>—</td><td>Le relire avec la commande de la section 5.2 (valide tant que le compte n'a pas été recréé)</td></tr>
+    <tr><td>Aucun e-mail</td><td>SMTP non configuré ou injoignable sans Internet</td><td>Configurer un relais SMTP joignable ; tester depuis Paramètres</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

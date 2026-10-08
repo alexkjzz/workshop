@@ -286,7 +286,13 @@ def cli_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--list-ports", action="store_true")
     parser.add_argument("--max-messages", type=_positive_int,
                         help="S'arreter apres N envois MQTT (diagnostic)")
+    parser.add_argument("--mqtt-ca",
+                        help="Certificat de l'autorite du broker : active MQTT sur TLS (port 8883)")
+    parser.add_argument("--mqtt-username", help="Identifiant MQTT")
+    parser.add_argument("--mqtt-password-file", help="Fichier contenant le mot de passe MQTT")
     args = parser.parse_args(argv)
+    if bool(args.mqtt_username) != bool(args.mqtt_password_file):
+        parser.error("--mqtt-username et --mqtt-password-file vont ensemble")
     if args.mqtt_port > 65535:
         parser.error("--mqtt-port doit etre compris entre 1 et 65535")
     if not args.mqtt_topic or any(character in args.mqtt_topic for character in "#+\0"):
@@ -317,6 +323,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    if args.mqtt_ca:
+        # Verifies the broker certificate and its host name (TLS 1.2 minimum).
+        import ssl
+        client.tls_set(ca_certs=args.mqtt_ca, tls_version=ssl.PROTOCOL_TLS_CLIENT)
+    if args.mqtt_username:
+        try:
+            with open(args.mqtt_password_file, encoding="utf-8") as secret:
+                client.username_pw_set(args.mqtt_username, secret.read().strip())
+        except OSError as error:
+            LOGGER.error("Mot de passe MQTT illisible : %s", error)
+            return 1
     client.reconnect_delay_set(min_delay=1, max_delay=15)
     client.max_inflight_messages_set(1)
     client.max_queued_messages_set(1)
@@ -325,7 +342,8 @@ def main(argv: list[str] | None = None) -> int:
         if reason_code.is_failure:
             LOGGER.warning("Connexion MQTT refusee : %s", reason_code)
         else:
-            LOGGER.info("MQTT connecte sur %s:%s, topic %s", args.mqtt_host, args.mqtt_port, args.mqtt_topic)
+            LOGGER.info("MQTT%s connecte sur %s:%s, topic %s", "S" if args.mqtt_ca else "",
+                        args.mqtt_host, args.mqtt_port, args.mqtt_topic)
 
     def on_disconnect(_client, _userdata, _flags, reason_code, _properties):
         if reason_code.is_failure:

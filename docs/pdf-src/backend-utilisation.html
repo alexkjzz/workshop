@@ -68,10 +68,9 @@
 <h3>macOS ou Linux</h3>
 <pre><code>bash install.sh</code></pre>
 <p>Le script vérifie Node.js, installe Mosquitto (Homebrew sur macOS) et les dépendances npm. Sous Linux, installez d'abord Node.js, npm et Mosquitto avec le gestionnaire de paquets du système.</p>
-<h3>Docker</h3>
-<pre><code>cp .env.example .env          # puis renseigner BETTER_AUTH_SECRET
-docker compose up -d --build</code></pre>
-<p>Le dashboard est alors servi sur <code>http://localhost:8080</code>. Le broker MQTT et le service IA restent installés sur la machine hôte.</p>
+<h3>Docker (production)</h3>
+<pre><code>docker compose up -d --build</code></pre>
+<p>Cette commande déploie toute la plateforme en HTTPS (broker, service IA et passerelle USB compris), avec certificats et secrets générés automatiquement. Le dashboard est servi sur <code>https://localhost</code>. Toutes les étapes (certificat à installer, mot de passe administrateur, comptes) sont dans le <strong>guide de déploiement</strong>. Les sections suivantes concernent surtout une installation manuelle ou de développement.</p>
 
 <h2 id="configuration"><span class="num">3</span> Configuration</h2>
 <p>La configuration se trouve dans <code>iot-backend/.env</code>, créé à partir de <code>iot-backend/.env.example</code>. Les valeurs par défaut conviennent à une installation locale. Seul le secret de session est obligatoire.</p>
@@ -96,7 +95,7 @@ docker compose up -d --build</code></pre>
 <h2 id="comptes"><span class="num">4</span> Comptes opérateurs</h2>
 <p>Pour des raisons de sécurité, l'inscription depuis le dashboard est désactivée. Créez chaque compte depuis le dossier <code>iot-backend</code> :</p>
 <pre><code>npm run user:create -- operateur@aethercorp.fr "Prénom Nom"</code></pre>
-<p>Le mot de passe est demandé deux fois, sans affichage, et doit contenir au moins <strong>12 caractères</strong>. Sous Docker :</p>
+<p>Le mot de passe est demandé deux fois, sans affichage, et doit contenir au moins <strong>12 caractères</strong>. Sous Docker, un administrateur initial est créé automatiquement au premier démarrage (voir le guide de déploiement) ; les autres comptes se créent ainsi :</p>
 <pre><code>docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.fr "Prénom Nom"</code></pre>
 <ul>
   <li>Une session dure 8 heures ; l'opérateur doit ensuite se reconnecter.</li>

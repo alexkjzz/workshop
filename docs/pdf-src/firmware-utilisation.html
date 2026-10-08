@@ -140,7 +140,9 @@
 <div class="warn"><p>Le boîtier est un outil de surveillance de démonstration. Il ne remplace pas un détecteur de gaz ou d'incendie certifié.</p></div>
 
 <h2 id="passerelle"><span class="num">7</span> Envoyer les mesures au dashboard</h2>
-<p>La passerelle USB lit les messages du boîtier et les transmet au serveur. Le broker MQTT, le backend et le dashboard doivent être démarrés (voir le guide d'utilisation du backend).</p>
+<p>La passerelle USB lit les messages du boîtier et les transmet au serveur.</p>
+<div class="tip"><p><strong>Serveur de production (Docker, Linux)</strong> : rien à faire. Branchez le boîtier en USB : le service <code>bridge</code> le détecte et transmet ses mesures de façon chiffrée (voir le guide de déploiement). Les étapes ci-dessous concernent un poste de développement.</p></div>
+<p>Sur un poste de développement, le broker MQTT, le backend et le dashboard doivent être démarrés (voir le guide d'utilisation du backend).</p>
 <ol class="steps">
   <li>Installez une fois les deux dépendances de la passerelle :
 <pre><code>.\ai\.venv\Scripts\python.exe -m pip install -r scripts\requirements-esp.txt</code></pre></li>

@@ -9,6 +9,19 @@ AI_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(AI_ROOT / ".env", override=False)
 
 
+def secret(name: str) -> str:
+    """Docker secrets: NAME_FILE takes precedence over NAME."""
+    file = os.getenv(f"{name}_FILE")
+    if file:
+        return Path(file).read_text(encoding="utf-8").strip()
+    return os.getenv(name, "")
+
+
+def optional_path(name: str) -> Path | None:
+    value = os.getenv(name, "")
+    return env_path(name, value) if value else None
+
+
 def env_path(name: str, default: str) -> Path:
     value = Path(os.getenv(name, default))
     return value if value.is_absolute() else AI_ROOT / value
@@ -18,7 +31,11 @@ def env_path(name: str, default: str) -> Path:
 class Settings:
     host: str = field(default_factory=lambda: os.getenv("AI_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.getenv("AI_PORT", "8001")))
-    service_token: str = field(default_factory=lambda: os.getenv("AI_SERVICE_TOKEN", ""))
+    service_token: str = field(default_factory=lambda: secret("AI_SERVICE_TOKEN"))
+    # HTTPS when both are set (production); AI_TLS_CA_FILE verifies the local instance check.
+    tls_cert_file: Path | None = field(default_factory=lambda: optional_path("AI_TLS_CERT_FILE"))
+    tls_key_file: Path | None = field(default_factory=lambda: optional_path("AI_TLS_KEY_FILE"))
+    tls_ca_file: Path | None = field(default_factory=lambda: optional_path("AI_TLS_CA_FILE"))
     backend_url: str = field(default_factory=lambda: os.getenv("BACKEND_URL", "http://127.0.0.1:3001"))
     model_path: Path = field(default_factory=lambda: env_path("ANOMALY_MODEL", "models/isolation_forest.joblib"))
     sensor_csv: Path = field(default_factory=lambda: env_path("SENSOR_CSV", "data/sensor_data.csv"))
@@ -46,6 +63,8 @@ class Settings:
     face_min_size: int = field(default_factory=lambda: int(os.getenv("FACE_MIN_SIZE_PIXELS", "40")))
 
     def __post_init__(self):
+        if (self.tls_cert_file is None) != (self.tls_key_file is None):
+            raise ValueError("AI_TLS_CERT_FILE and AI_TLS_KEY_FILE must be set together")
         if not 1 <= self.port <= 65535:
             raise ValueError("AI_PORT must be between 1 and 65535")
         if self.anomaly_window < 2 or not 0 < self.contamination <= 0.5:

@@ -258,9 +258,11 @@ LED VERTE   : OFF
     <tr><td><code>--device</code></td><td>sentinel-x-01</td><td>Identifiant inclus dans chaque message</td></tr>
     <tr><td><code>--list-ports</code></td><td>—</td><td>Liste les ports détectés et quitte</td></tr>
     <tr><td><code>--max-messages</code></td><td>illimité</td><td>Arrêt après N envois (diagnostic)</td></tr>
+    <tr><td><code>--mqtt-ca</code></td><td>—</td><td>Certificat de l'autorité du broker : active MQTT sur TLS, nom d'hôte vérifié</td></tr>
+    <tr><td><code>--mqtt-username</code> / <code>--mqtt-password-file</code></td><td>—</td><td>Compte MQTT ; le mot de passe est lu dans un fichier, jamais en argument</td></tr>
   </tbody>
 </table>
-<div class="warn"><p>La passerelle cible un broker local sans authentification ni TLS (<code>scripts/mosquitto-local.conf</code> écoute uniquement sur <code>127.0.0.1</code>). Il ne doit pas être exposé sur le réseau.</p></div>
+<div class="note"><p><strong>En production</strong>, le service Docker <code>bridge</code> lance la passerelle automatiquement : MQTTS vers le broker, compte <code>bridge</code> limité par ACL à la publication de la télémétrie, accès limité aux ports série. Le broker sans TLS de <code>scripts/mosquitto-local.conf</code> (écoute sur <code>127.0.0.1</code>) est réservé au développement. Voir le guide de déploiement.</p></div>
 
 <h2 id="configuration"><span class="num">7</span> Configuration</h2>
 <p>Toutes les constantes sont dans <code>sentinel_config.h</code>. Seuls <code>PIN_DHT</code> et <code>DHT_TYPE</code> peuvent être surchargés à la compilation sans modifier le fichier.</p>
