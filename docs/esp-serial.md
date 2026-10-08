@@ -46,7 +46,7 @@ identifiant `sentinel-x-01`. Si le backend utilise d'autres valeurs :
 ```
 
 Cette passerelle vise le broker local TCP du projet, sans authentification ni
-TLS. Elle ne remplace pas le firmware Wi-Fi/MQTTS situé dans `firmware-old`.
+TLS : le broker doit rester limité à la machine locale.
 
 Pour un diagnostic limité à cinq envois, utiliser `--max-messages 5`.
 **Ctrl+C** ferme le port et la connexion MQTT. L'ouverture d'un port USB peut

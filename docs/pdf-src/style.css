@@ -1,0 +1,512 @@
+/* Sentinel-X documentation: shared print stylesheet (A4, rendered by Chrome). */
+@page {
+  size: A4;
+  margin: 18mm 17mm 20mm;
+}
+
+@page :first {
+  margin: 0;
+}
+
+:root {
+  --ink: #142033;
+  --muted: #5b6575;
+  --soft: #8a93a3;
+  --line: #d9dee7;
+  --panel: #f4f6fa;
+  --accent: #2b62d9;
+  --accent-soft: #e8efff;
+  --ok: #17804a;
+  --ok-soft: #e4f4ea;
+  --warn: #a35d00;
+  --warn-soft: #fdf1df;
+  --danger: #b42c2c;
+  --danger-soft: #fbe7e7;
+  --mono: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 10.2pt;
+  line-height: 1.5;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+}
+
+/* ---- Cover ------------------------------------------------------------ */
+.cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 297mm;
+  padding: 26mm 22mm 20mm;
+  color: #fff;
+  background: linear-gradient(160deg, #0f1c33 0%, #17305c 55%, #1f4fae 100%);
+  break-after: page;
+}
+
+.cover-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.cover-brand svg {
+  width: 30px;
+  height: 30px;
+}
+
+.cover-kind {
+  margin-top: 62mm;
+  color: #a9c2ff;
+  font-size: 11pt;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Real heading for the PDF outline: on one line so Chrome keeps its spaces. */
+.outline-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  color: transparent;
+  font-size: 1pt;
+  white-space: nowrap;
+}
+
+.cover-title {
+  max-width: 125mm;
+  margin: 6mm 0 0;
+  font-size: 34pt;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.cover-subtitle {
+  max-width: 140mm;
+  margin-top: 6mm;
+  color: #d6e1fa;
+  font-size: 13pt;
+  line-height: 1.45;
+}
+
+.cover-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2.5mm 8mm;
+  margin-top: auto;
+  border-top: 1px solid rgb(255 255 255 / 25%);
+  padding-top: 7mm;
+  color: #d6e1fa;
+  font-size: 9.5pt;
+}
+
+.cover-meta dt {
+  color: #a9c2ff;
+  font-weight: 600;
+}
+
+.cover-meta dd {
+  margin: 0;
+}
+
+/* ---- Table of contents ------------------------------------------------- */
+.toc {
+  break-after: page;
+}
+
+.toc h2 {
+  margin-top: 0;
+}
+
+.toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: toc;
+}
+
+.toc li {
+  display: flex;
+  gap: 4mm;
+  border-bottom: 1px solid var(--line);
+  padding: 2.4mm 0;
+  counter-increment: toc;
+}
+
+.toc li::before {
+  content: counter(toc, decimal-leading-zero);
+  min-width: 8mm;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.toc a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.toc li span {
+  display: block;
+  color: var(--muted);
+  font-size: 9pt;
+}
+
+/* ---- Headings and text ------------------------------------------------- */
+h2 {
+  margin: 9mm 0 3mm;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 1.6mm;
+  font-size: 17pt;
+  line-height: 1.2;
+  break-after: avoid;
+}
+
+h2.new-page {
+  break-before: page;
+  margin-top: 0;
+}
+
+h2 .num {
+  margin-right: 1mm;
+  color: var(--accent);
+}
+
+h3 {
+  margin: 6mm 0 2mm;
+  font-size: 12.5pt;
+  break-after: avoid;
+}
+
+h4 {
+  margin: 4mm 0 1.5mm;
+  color: var(--muted);
+  font-size: 10.5pt;
+  break-after: avoid;
+}
+
+p {
+  margin: 0 0 2.6mm;
+}
+
+p,
+li {
+  orphans: 3;
+  widows: 3;
+}
+
+ul,
+ol {
+  margin: 0 0 3mm;
+  padding-left: 5.5mm;
+}
+
+li {
+  margin-bottom: 1mm;
+}
+
+a {
+  color: var(--accent);
+}
+
+strong {
+  font-weight: 650;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 11pt;
+}
+
+code,
+kbd {
+  border-radius: 3px;
+  padding: 0.1mm 0.6mm;
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 8.6pt;
+}
+
+kbd {
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+}
+
+pre {
+  margin: 0 0 3.2mm;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 3mm 3.5mm;
+  background: #f7f9fc;
+  font-family: var(--mono);
+  font-size: 8.2pt;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  break-inside: avoid;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+/* ---- Tables ------------------------------------------------------------ */
+table {
+  width: 100%;
+  margin: 0 0 3.5mm;
+  border-collapse: collapse;
+  font-size: 9pt;
+  break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  break-inside: avoid;
+}
+
+th {
+  border-bottom: 1.5px solid var(--ink);
+  padding: 1.8mm 2mm;
+  color: var(--ink);
+  background: var(--panel);
+  font-weight: 650;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 1.6mm 2mm;
+  vertical-align: top;
+}
+
+td code {
+  white-space: nowrap;
+}
+
+td.wrap code {
+  white-space: normal;
+}
+
+/* ---- Callouts ---------------------------------------------------------- */
+div.note,
+div.warn,
+div.danger,
+div.tip {
+  margin: 0 0 3.5mm;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 2.6mm 3.5mm;
+  background: var(--accent-soft);
+  break-inside: avoid;
+}
+
+div.note p:last-child,
+div.warn p:last-child,
+div.danger p:last-child,
+div.tip p:last-child {
+  margin-bottom: 0;
+}
+
+div.note::before,
+div.warn::before,
+div.danger::before,
+div.tip::before {
+  display: block;
+  margin-bottom: 1mm;
+  font-size: 8.4pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+div.note::before {
+  content: 'À savoir';
+  color: var(--accent);
+}
+
+div.tip {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+div.tip::before {
+  content: 'Conseil';
+  color: var(--ok);
+}
+
+div.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+div.warn::before {
+  content: 'Attention';
+  color: var(--warn);
+}
+
+div.danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+div.danger::before {
+  content: 'Important';
+  color: var(--danger);
+}
+
+/* ---- Figures and diagrams --------------------------------------------- */
+figure {
+  margin: 1mm 0 4.5mm;
+  break-inside: avoid;
+}
+
+figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 150mm;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+figure.narrow img {
+  max-width: 62%;
+}
+
+figure.half img {
+  max-width: 82%;
+}
+
+figcaption {
+  margin-top: 1.8mm;
+  color: var(--muted);
+  font-size: 8.6pt;
+  text-align: center;
+}
+
+figcaption b {
+  color: var(--ink);
+}
+
+.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.diagram svg text {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+/* ---- Small layout helpers --------------------------------------------- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5mm;
+  margin-bottom: 4mm;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 3mm 3.5mm;
+  background: #fff;
+  break-inside: avoid;
+}
+
+.card h4 {
+  margin-top: 0;
+  color: var(--ink);
+}
+
+.steps {
+  counter-reset: step;
+  padding-left: 0;
+  list-style: none;
+}
+
+.steps > li {
+  position: relative;
+  margin-bottom: 2.4mm;
+  padding-left: 9mm;
+  counter-increment: step;
+  break-inside: avoid;
+}
+
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  top: 0.1mm;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 6mm;
+  height: 6mm;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--accent);
+  font-size: 8.4pt;
+  font-weight: 700;
+}
+
+.pill {
+  display: inline-block;
+  border-radius: 99px;
+  padding: 0.2mm 2.2mm;
+  font-size: 8.2pt;
+  font-weight: 650;
+}
+
+.pill.ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.pill.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.pill.danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.pill.info {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.keep {
+  break-inside: avoid;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 8.8pt;
+}

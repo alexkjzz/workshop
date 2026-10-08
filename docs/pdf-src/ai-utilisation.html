@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Service IA · Guide d'utilisation</title>
+<meta name="pdf-name" content="Sentinel-X_IA_Guide-utilisation.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Guide d'utilisation</div>
+  <h1 class="outline-title">Service d'intelligence artificielle</h1>
+  <div class="cover-title" aria-hidden="true">Service d'intelligence artificielle</div>
+  <p class="cover-subtitle">Installer et démarrer le service, préparer les modèles de vision, entraîner la détection d'anomalies sur vos mesures, gérer le catalogue facial et faire une démonstration.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Public</dt><dd>Équipe IA et administrateurs du PC Serveur Local</dd>
+    <dt>Prérequis</dt><dd>Python 3.12 64 bits, backend installé, webcam USB pour la vision, Internet pour télécharger les modèles une fois</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#presentation">Ce que fait le service<span>Trois analyses, un niveau de risque</span></a></li>
+    <li><a href="#installation">Installer<span>Script Windows ou installation manuelle</span></a></li>
+    <li><a href="#demarrer">Démarrer et vérifier<span>Lancement, santé, dashboard</span></a></li>
+    <li><a href="#modeles">Installer les modèles de vision<span>YOLO et reconnaissance faciale</span></a></li>
+    <li><a href="#entrainer">Entraîner la détection d'anomalies<span>Collecte, export, sélection, entraînement</span></a></li>
+    <li><a href="#webcam">Utiliser la webcam<span>Démarrage, arrêt, réglages</span></a></li>
+    <li><a href="#catalogue">Gérer le catalogue facial<span>Depuis le dashboard ou par fichiers</span></a></li>
+    <li><a href="#demo">Faire une démonstration sans boîtier<span>Modèle et simulateur dédiés</span></a></li>
+    <li><a href="#proteger">Protéger le service<span>Jeton partagé avec le backend</span></a></li>
+    <li><a href="#depannage">Dépannage<span>Problèmes fréquents et solutions</span></a></li>
+  </ol>
+</section>
+
+<h2 id="presentation" style="margin-top:0"><span class="num">1</span> Ce que fait le service</h2>
+<p>Le service IA tourne sur le PC serveur et analyse chaque mesure que le backend lui transmet. Il combine trois analyses :</p>
+<div class="grid-2">
+  <div class="card"><h4>Anomalies des capteurs</h4><p class="small">Un modèle <strong>Isolation Forest</strong>, entraîné sur vos mesures normales, repère les évolutions inhabituelles de température, d'humidité, de gaz et de présence, avant qu'un seuil fixe ne soit atteint.</p></div>
+  <div class="card"><h4>Détection de personnes</h4><p class="small"><strong>YOLOv8</strong> détecte et suit les personnes filmées par la webcam du serveur. Une détection est confirmée sur plusieurs images.</p></div>
+  <div class="card"><h4>Reconnaissance faciale</h4><p class="small"><strong>YuNet et SFace</strong> identifient les visages par comparaison avec le catalogue des personnes connues.</p></div>
+  <div class="card"><h4>Niveau de risque</h4><p class="small">La fusion des preuves produit un score de 0 à 100 (SAFE à CRITICAL), une catégorie de menace et des raisons lisibles dans le dashboard.</p></div>
+</div>
+<p>Le service est <strong>facultatif</strong> : sans lui, le dashboard, les mesures, les alarmes du boîtier et les notifications continuent de fonctionner. Le panneau IA indique alors « OFFLINE ».</p>
+
+<h2 id="installation"><span class="num">2</span> Installer</h2>
+<h3>Avec le script Windows (recommandé)</h3>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1</code></pre>
+<p>Le script crée l'environnement Python <code>ai/.venv</code>, installe les dépendances et copie <code>ai/.env.example</code> en <code>ai/.env</code> s'il n'existe pas. Sur un poste sans webcam, ajoutez <code>-CoreOnly</code> pour ne pas installer les bibliothèques de vision.</p>
+<h3>Installation manuelle</h3>
+<pre><code>Set-Location .\ai
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env</code></pre>
+<table>
+  <thead><tr><th>Fichier de dépendances</th><th>Usage</th></tr></thead>
+  <tbody>
+    <tr><td><code>requirements.txt</code></td><td>Installation complète (analyse et vision)</td></tr>
+    <tr><td><code>requirements-core.txt</code></td><td>Analyse des capteurs uniquement, sans webcam</td></tr>
+    <tr><td><code>requirements-vision.txt</code></td><td>Ajout de la vision (OpenCV, YOLO, Pillow)</td></tr>
+    <tr><td><code>requirements-test.txt</code> / <code>requirements-lock.txt</code></td><td>Tests / versions figées pour reproduire l'environnement</td></tr>
+  </tbody>
+</table>
+<p>Sous macOS ou Linux, utilisez <code>python3.12 -m venv .venv</code> et <code>.venv/bin/python</code> à la place de <code>.\.venv\Scripts\python.exe</code>.</p>
+
+<h2 id="demarrer"><span class="num">3</span> Démarrer et vérifier</h2>
+<pre><code>Set-Location .\ai
+.\.venv\Scripts\python.exe -m app.main</code></pre>
+<ol class="steps">
+  <li>Ouvrez <code>http://127.0.0.1:8001/health</code> : la réponse contient <code>"status":"ok"</code> et indique si un modèle est chargé (<code>model_loaded</code>).</li>
+  <li>Dans le dashboard, page <em>Métriques</em>, le panneau <strong>AI ENGINE</strong> affiche « ONLINE ».</li>
+  <li>Tant qu'aucun modèle n'est entraîné, la détection d'anomalies indique « modèle non entraîné » : c'est l'état normal après installation (voir section 5).</li>
+</ol>
+<div class="note"><p>Si le service est déjà démarré, la commande affiche « Sentinel-X IA est déjà démarré » et s'arrête sans erreur : utilisez l'instance existante. Pour charger une nouvelle version du code, arrêtez d'abord l'ancienne instance (<kbd>Ctrl</kbd>+<kbd>C</kbd>).</p></div>
+<p>Le backend contacte le service à l'adresse <code>AI_SERVICE_URL</code> (<code>http://127.0.0.1:8001</code> par défaut). Si vous changez <code>AI_PORT</code>, reportez-le dans <code>iot-backend/.env</code>.</p>
+
+<h2 id="modeles"><span class="num">4</span> Installer les modèles de vision</h2>
+<p>Les modèles ne sont pas fournis avec le dépôt. Téléchargez-les une fois, avec Internet, depuis le dossier <code>ai</code> :</p>
+<h4>Détection de personnes (YOLOv8n, environ 6 Mo)</h4>
+<pre><code>.\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
+Invoke-WebRequest -Uri 'https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt' -OutFile .\models\yolov8n.pt</code></pre>
+<h4>Reconnaissance faciale (YuNet + SFace, environ 39 Mo)</h4>
+<pre><code>.\.venv\Scripts\python.exe -m app.vision.setup_faces</code></pre>
+<p>Le script télécharge les modèles officiels d'OpenCV, vérifie leur empreinte et ne remplace un fichier que s'il est différent. Une fois installés, les modèles fonctionnent hors ligne. Redémarrez le service IA pour les charger.</p>
+
+<h2 id="entrainer"><span class="num">5</span> Entraîner la détection d'anomalies</h2>
+<p>Le modèle apprend ce qu'est un fonctionnement <strong>normal</strong> de votre site. Il doit donc être entraîné sur vos propres mesures, une fois le matériel vérifié.</p>
+<ol class="steps">
+  <li><strong>Vérifier les capteurs</strong> : comparez température et humidité avec un instrument de référence. N'entraînez pas le modèle sur des mesures incohérentes.</li>
+  <li><strong>Collecter</strong> : laissez le boîtier fonctionner dans plusieurs conditions normales (jour, nuit, passages habituels). Il faut au moins <strong>128 valeurs par capteur</strong> ; plusieurs milliers sont recommandées.</li>
+  <li><strong>Exporter</strong> les mesures réelles depuis la base du backend (lecture seule, les données simulées sont exclues) :
+<pre><code>.\.venv\Scripts\python.exe -m app.integrations.backend_client --database ..\iot-backend\data\telemetry.db --output data\sensor_data.csv</code></pre></li>
+  <li><strong>Sélectionner</strong> uniquement les périodes réellement normales dans un nouveau fichier <code>data\normal_validated.csv</code>, avec l'en-tête <code>timestamp,temperature,humidity,gas,presence</code>. Retirez les incidents, tests et pannes.</li>
+  <li><strong>Entraîner</strong> :
+<pre><code>.\.venv\Scripts\python.exe -m app.anomaly.trainer --csv data\normal_validated.csv --output models\isolation_forest.joblib</code></pre></li>
+  <li><strong>Charger</strong> le modèle : redémarrez le service IA, ou appelez la route de rechargement (avec le jeton s'il est configuré) :
+<pre><code>Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/model/reload</code></pre></li>
+  <li><strong>Évaluer</strong> pendant quelques jours : surveillez les anomalies signalées et notez les fausses alertes.</li>
+</ol>
+<div class="tip"><p>Si les anomalies sont trop fréquentes, enrichissez d'abord la base normale (plus de durée, plus de situations) et vérifiez la régularité des mesures avant de modifier <code>ANOMALY_CONTAMINATION</code>. Les mesures et le modèle restent sur votre machine : ils sont ignorés par Git. Après une mise à jour de scikit-learn, réentraînez le modèle.</p></div>
+<p>Le score d'anomalie (0 à 1) mesure l'écart au comportement appris ; ce n'est pas une probabilité. Le modèle ne corrige pas une mesure physiquement fausse et ne remplace pas les alarmes du boîtier.</p>
+
+<h2 id="webcam"><span class="num">6</span> Utiliser la webcam</h2>
+<p>La webcam se pilote depuis le dashboard, page <em>Caméra</em> : <strong>Démarrer la webcam</strong>, puis <strong>Arrêter la webcam</strong>. Le flux s'affiche dès que la première image est prête ; les personnes détectées sont encadrées sur l'image.</p>
+<figure class="half">
+  <img src="assets/camera-feed.png" alt="Panneau Flux vidéo">
+  <figcaption><b>Figure 1.</b> Panneau « Flux vidéo » du dashboard, webcam arrêtée.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Réglage (<code>ai/.env</code>)</th><th>Défaut</th><th>Quand le modifier</th></tr></thead>
+  <tbody>
+    <tr><td><code>VISION_CAMERA_INDEX</code></td><td>0</td><td>Plusieurs caméras : essayer 1, 2… ou −1 pour une recherche automatique</td></tr>
+    <tr><td><code>YOLO_CONFIDENCE</code></td><td>0.55</td><td>Trop de fausses détections (augmenter) ou détections manquées (diminuer)</td></tr>
+    <tr><td><code>VISION_CONFIRM_FRAMES</code></td><td>3</td><td>Confirmation plus rapide ou plus prudente</td></tr>
+    <tr><td><code>VISION_AUTO_START</code></td><td>false</td><td>Démarrer la webcam automatiquement avec le service</td></tr>
+  </tbody>
+</table>
+<p>Sans modèle YOLO, la vidéo reste visible mais la détection de personnes est indisponible. Plusieurs spectateurs peuvent regarder le flux sans multiplier les calculs. Aucune image n'est enregistrée.</p>
+
+<h2 id="catalogue"><span class="num">7</span> Gérer le catalogue facial</h2>
+<h3>Depuis le dashboard (recommandé)</h3>
+<p>Page <em>Caméra</em>, panneau « Ajouter une personne » : saisissez le nom, choisissez 1 à 5 photos nettes avec un seul visage, puis cliquez sur <strong>Enregistrer la personne</strong>. Le service vérifie chaque photo, corrige son orientation, supprime ses métadonnées (dont la localisation) et met à jour le catalogue immédiatement. Le guide du dashboard détaille cette procédure.</p>
+<h3>Par fichiers</h3>
+<p>Créez un sous-dossier par personne dans <code>ai/known_faces</code>, au nom à afficher :</p>
+<pre><code>ai/known_faces/
+  Mohamed/
+    photo1.jpg
+    photo2.jpg
+    photo3.jpg</code></pre>
+<p>Puis cliquez sur <strong>Recharger les visages connus</strong> dans le dashboard : aucun redémarrage n'est nécessaire. Les photos sans visage, avec plusieurs visages ou trop petites sont ignorées et signalées dans le journal du service (lignes <code>[FACE]</code>).</p>
+<table>
+  <thead><tr><th>Réglage</th><th>Défaut</th><th>Effet</th></tr></thead>
+  <tbody>
+    <tr><td><code>FACE_RECOGNITION_THRESHOLD</code></td><td>0.55</td><td>Ressemblance minimale pour reconnaître une personne ; à ajuster sur vos propres photos</td></tr>
+    <tr><td><code>FACE_MIN_SIZE_PIXELS</code></td><td>40</td><td>Taille minimale d'un visage analysé</td></tr>
+    <tr><td><code>FACE_EVENT_COOLDOWN_SECONDS</code></td><td>5</td><td>Délai avant un nouvel événement pour la même personne</td></tr>
+    <tr><td><code>FACE_RECOGNITION_ENABLED</code></td><td>true</td><td>Désactiver complètement la reconnaissance faciale</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>Les photos de référence sont des données biométriques : ajoutez seulement des personnes informées et consentantes. Ne les versionnez jamais (le dossier est ignoré par Git). Le score affiché est une ressemblance, pas une preuve d'identité.</p></div>
+
+<h2 id="demo"><span class="num">8</span> Faire une démonstration sans boîtier</h2>
+<p>Pour une soutenance sans matériel, utilisez un <strong>modèle de démonstration distinct</strong>, entraîné sur des données synthétiques, puis le simulateur IA :</p>
+<pre><code>Set-Location .\ai
+.\.venv\Scripts\python.exe -m app.simulator --generate-training data\simulated_normal.csv
+.\.venv\Scripts\python.exe -m app.anomaly.trainer --csv data\simulated_normal.csv --output models\demo_isolation_forest.joblib
+$env:ANOMALY_MODEL = 'models/demo_isolation_forest.joblib'
+.\.venv\Scripts\python.exe -m app.main</code></pre>
+<p>Dans un autre terminal, avec le broker, le backend et le dashboard démarrés :</p>
+<pre><code>.\.venv\Scripts\python.exe -m app.simulator</code></pre>
+<p>Le simulateur publie 25 mesures normales puis 40 mesures de dérive progressive. Le dashboard montre la détection de l'anomalie <strong>avant</strong> les seuils d'alerte classiques. Toutes ces données portent la mention <strong>SIMULATION</strong> et ne servent jamais à l'entraînement réel. Pour revenir au modèle réel, arrêtez le service, supprimez la variable (<code>Remove-Item Env:ANOMALY_MODEL</code>) et relancez.</p>
+<div class="note"><p>N'utilisez pas en même temps le simulateur du mode test <code>run.sh</code>, qui publie sa propre scène et une caméra factice : les deux scénarios se mélangeraient.</p></div>
+
+<h2 id="proteger"><span class="num">9</span> Protéger le service</h2>
+<p>Le service n'écoute que sur la machine locale. Pour ajouter une protection, définissez le même jeton aléatoire dans les deux fichiers de configuration, puis redémarrez les deux services :</p>
+<pre><code># ai/.env                      # iot-backend/.env
+AI_SERVICE_TOKEN=valeur-longue  AI_SERVICE_TOKEN=valeur-longue</code></pre>
+<p>Toutes les routes, sauf <code>/</code> et <code>/health</code>, exigent alors ce jeton. Le backend le transmet automatiquement ; le navigateur ne le voit jamais. Ne chargez que des fichiers de modèle (<code>.joblib</code>, <code>.pt</code>) provenant de sources de confiance.</p>
+
+<h2 id="depannage"><span class="num">10</span> Dépannage</h2>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr></thead>
+  <tbody>
+    <tr><td>AI ENGINE « OFFLINE »</td><td>Service arrêté, port ou jeton différent</td><td>Vérifier <code>/health</code>, le port 8001, <code>AI_SERVICE_URL</code> et le jeton des deux côtés</td></tr>
+    <tr><td>« Modèle non entraîné »</td><td>Aucun fichier <code>isolation_forest.joblib</code></td><td>Suivre la section 5, puis redémarrer ou recharger</td></tr>
+    <tr><td>Modèle refusé au chargement</td><td>Version de scikit-learn différente de celle de l'entraînement</td><td>Réentraîner le modèle</td></tr>
+    <tr><td>« Au moins 128 … requis »</td><td>CSV trop court ou capteur souvent absent</td><td>Collecter davantage de mesures normales</td></tr>
+    <tr><td>Webcam indisponible</td><td>Caméra utilisée par une autre application, autorisations, mauvais index</td><td>Fermer Teams/Zoom, autoriser les applications de bureau, essayer <code>VISION_CAMERA_INDEX=1</code></td></tr>
+    <tr><td>Vidéo visible mais aucune détection</td><td>Poids <code>yolov8n.pt</code> absents</td><td>Les télécharger (section 4) et redémarrer</td></tr>
+    <tr><td>« Modèle facial indisponible »</td><td>Modèles YuNet/SFace absents</td><td>Lancer <code>python -m app.vision.setup_faces</code>, redémarrer</td></tr>
+    <tr><td>Une personne connue reste « Inconnu »</td><td>Photos de référence peu nettes, éclairage, profil, seuil trop strict</td><td>Ajouter 3 à 5 photos de face ; évaluer le seuil sur vos images</td></tr>
+    <tr><td>Erreur DLL OpenCV ou PyTorch (Windows)</td><td>Redistribuable Visual C++ manquant ou Python 32 bits</td><td>Installer le redistribuable Microsoft Visual C++ x64 ; utiliser Python 3.12 64 bits</td></tr>
+    <tr><td><code>[Errno 10048]</code> au démarrage</td><td>Une instance occupe déjà le port</td><td>Utiliser l'instance existante ou l'arrêter avant de relancer</td></tr>
+    <tr><td>Flux toujours fictif</td><td>Ancien <code>VISION_STREAM_URL</code> défini côté backend, simulateur actif</td><td>Retirer la variable du backend, arrêter le simulateur</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

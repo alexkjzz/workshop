@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Dashboard de supervision · Guide d'utilisation</title>
+<meta name="pdf-name" content="Sentinel-X_Frontend_Guide-utilisation.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Guide d'utilisation</div>
+  <h1 class="outline-title">Dashboard de supervision</h1>
+  <div class="cover-title" aria-hidden="true">Dashboard de supervision</div>
+  <p class="cover-subtitle">Se connecter, surveiller le boîtier et ses capteurs, lire les analyses de l'IA, utiliser la caméra et la reconnaissance faciale, recevoir les alertes par e-mail.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Public</dt><dd>Opérateurs et superviseurs du centre de commandement</dd>
+    <dt>Prérequis</dt><dd>Un compte fourni par l'administrateur et un navigateur récent</dd>
+    <dt>Version</dt><dd>Octobre 2026 — captures réalisées sur la version du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#connexion">Se connecter<span>Accès, mot de passe, sécurité</span></a></li>
+    <li><a href="#navigation">Se repérer<span>Barre de navigation, thème, déconnexion</span></a></li>
+    <li><a href="#metriques">Page Métriques<span>Broker, boîtier, capteurs, historique</span></a></li>
+    <li><a href="#ia">Analyses de l'IA<span>Lire le panneau AI ENGINE</span></a></li>
+    <li><a href="#camera">Page Caméra<span>Webcam, détection de personnes</span></a></li>
+    <li><a href="#visages">Reconnaissance faciale<span>Ajouter une personne, recharger, lire les résultats</span></a></li>
+    <li><a href="#parametres">Page Paramètres<span>Recevoir les alertes par e-mail</span></a></li>
+    <li><a href="#affichage">Thème sombre et mobile<span>Adapter l'affichage</span></a></li>
+    <li><a href="#situations">Situations courantes<span>Messages affichés et que faire</span></a></li>
+  </ol>
+</section>
+
+<h2 id="connexion" style="margin-top:0"><span class="num">1</span> Se connecter</h2>
+<p>Ouvrez l'adresse du dashboard communiquée par votre administrateur, par exemple <code>http://127.0.0.1:5173</code> sur le PC serveur ou <code>http://192.168.10.1:8080</code> depuis le réseau de la table. Saisissez votre adresse e-mail et votre mot de passe, puis cliquez sur <strong>Se connecter</strong>.</p>
+<figure class="half">
+  <img src="assets/login.png" alt="Écran de connexion">
+  <figcaption><b>Figure 1.</b> Écran de connexion.</figcaption>
+</figure>
+<ul>
+  <li>Il n'est pas possible de créer un compte soi-même : demandez-le à l'administrateur.</li>
+  <li>Après <strong>5 tentatives échouées</strong> en une minute, la connexion est bloquée une minute (« Trop de tentatives »).</li>
+  <li>La session dure <strong>8 heures</strong>. Lorsqu'elle expire, le dashboard revient automatiquement à cet écran.</li>
+</ul>
+
+<h2 id="navigation"><span class="num">2</span> Se repérer</h2>
+<figure>
+  <img src="assets/topbar.png" alt="Barre de navigation">
+  <figcaption><b>Figure 2.</b> Barre de navigation, présente sur toutes les pages.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Élément</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Métriques</strong></td><td>Mesures des capteurs, état du boîtier, analyses de l'IA</td></tr>
+    <tr><td><strong>Caméra</strong></td><td>Webcam du serveur, détection de personnes, reconnaissance faciale</td></tr>
+    <tr><td><strong>Paramètres</strong></td><td>Réglage des alertes par e-mail</td></tr>
+    <tr><td>Nom de l'opérateur</td><td>Rappelle le compte connecté</td></tr>
+    <tr><td><strong>Se déconnecter</strong></td><td>Ferme la session (à faire en quittant le poste)</td></tr>
+    <tr><td>Icône lune / soleil</td><td>Bascule entre thème clair et thème sombre</td></tr>
+  </tbody>
+</table>
+<p>Toutes les données se mettent à jour <strong>automatiquement</strong> : il est inutile de recharger la page.</p>
+
+<h2 id="metriques"><span class="num">3</span> Page Métriques</h2>
+<h3>3.1 État du broker</h3>
+<p>En haut à droite, la pastille indique si le serveur reçoit les messages du boîtier :</p>
+<ul>
+  <li><span class="pill ok">Broker MQTT connecté</span> : la chaîne de transmission fonctionne ;</li>
+  <li><span class="pill danger">Broker MQTT déconnecté</span> : plus aucune mesure n'arrive, prévenez l'administrateur ;</li>
+  <li>pastille grise « Connexion au serveur… » : chargement en cours.</li>
+</ul>
+<h3>3.2 État du boîtier ESP</h3>
+<p>Ce panneau reproduit ce que le boîtier signale lui-même : état des capteurs, alarme locale et LEDs.</p>
+<figure>
+  <img src="assets/esp-panel.png" alt="État du boîtier, surveillance normale">
+  <figcaption><b>Figure 3.</b> Surveillance normale : capteurs prêts, alarme inactive, LED verte allumée.</figcaption>
+</figure>
+<figure>
+  <img src="assets/esp-panel-alarm.png" alt="État du boîtier en alarme">
+  <figcaption><b>Figure 4.</b> Mouvement détecté : l'alarme locale est active, la LED rouge allumée.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Carte</th><th>États possibles</th></tr></thead>
+  <tbody>
+    <tr><td>Gaz MQ-2</td><td>Préchauffage, Normal, Danger</td></tr>
+    <tr><td>Présence PIR</td><td>Calibration, Aucun mouvement, Mouvement détecté</td></tr>
+    <tr><td>DHT22</td><td>Mesure valide, Erreur (capteur de température à vérifier)</td></tr>
+    <tr><td>Alarme locale</td><td>Inactive, Active</td></tr>
+    <tr><td>LED rouge / orange / verte</td><td>Allumée, Éteinte</td></tr>
+  </tbody>
+</table>
+<div class="note"><p>Si le boîtier n'envoie plus rien pendant 30 secondes, toutes les cartes passent à « Inconnu » : vérifiez le câble USB et la passerelle. Le boîtier continue néanmoins de déclencher ses alarmes sur place.</p></div>
+
+<h3>3.3 Capteurs et historique</h3>
+<p>Chaque capteur (température, humidité, gaz, présence) dispose d'une carte avec :</p>
+<ul>
+  <li>la <strong>valeur actuelle</strong> en grand ;</li>
+  <li>un <strong>graphique en temps réel</strong> des 5 dernières minutes environ — survolez-le pour lire la valeur et l'heure d'un point ;</li>
+  <li>le tableau des <strong>dernières mesures</strong>, de la plus récente à la plus ancienne.</li>
+</ul>
+<figure class="narrow">
+  <img src="assets/sensor-card-tooltip.png" alt="Carte capteur">
+  <figcaption><b>Figure 5.</b> Carte « Température ».</figcaption>
+</figure>
+<p>« Aucune donnée » signifie que le capteur n'a pas encore fourni de mesure valide : préchauffage, capteur en erreur ou boîtier débranché. Une coupure apparaît comme un trou dans la courbe. La valeur du gaz est une mesure relative (0 à 1023), utile pour repérer une hausse.</p>
+
+<h3>3.4 Commande LED</h3>
+<figure>
+  <img src="assets/led-commands.png" alt="Commande LED">
+  <figcaption><b>Figure 6.</b> Panneau de commande des LEDs.</figcaption>
+</figure>
+<p>Les boutons <strong>Allumer</strong> et <strong>Éteindre</strong> envoient un ordre au boîtier. Avec le boîtier USB actuel, ces ordres sont publiés mais <strong>non appliqués</strong> : le boîtier gère ses LEDs lui-même, selon les alarmes.</p>
+
+<h2 id="ia"><span class="num">4</span> Analyses de l'IA</h2>
+<p>Le panneau <strong>AI ENGINE</strong> présente l'analyse automatique de chaque mesure : comportement inhabituel des capteurs, présence confirmée par la caméra et niveau de risque global.</p>
+<figure>
+  <img src="assets/ai-panel-alarm.png" alt="Panneau AI ENGINE">
+  <figcaption><b>Figure 7.</b> Haut du panneau AI ENGINE pendant un passage détecté par le PIR, webcam arrêtée : risque LOW, analyse partielle. Le panneau se poursuit avec l'aperçu de la webcam et les événements récents.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Indicateur</th><th>Signification</th></tr></thead>
+  <tbody>
+    <tr><td>ONLINE / OFFLINE</td><td>Disponibilité du service d'analyse</td></tr>
+    <tr><td>Anomaly Detection</td><td>NORMAL ou ANOMALIE : les mesures s'écartent-elles du comportement habituel appris ?</td></tr>
+    <tr><td>Anomaly Score</td><td>Ampleur de l'écart, de 0 (habituel) à 1 (très inhabituel) ; ce n'est pas une probabilité</td></tr>
+    <tr><td>Risk Score / Risk Level</td><td>Risque global de 0 à 100 : SAFE (0–24), LOW (25–49), MEDIUM (50–74), HIGH (75–89), CRITICAL (90–100)</td></tr>
+    <tr><td>Person Detection</td><td>Personne confirmée par la caméra, ou « Indisponible » si la webcam est arrêtée</td></tr>
+    <tr><td>AI Confidence</td><td>Confiance dans l'analyse, selon les données disponibles</td></tr>
+    <tr><td>Type de menace</td><td>INTRUSION, ENVIRONMENT, MULTI_THREAT, SENSOR_ANOMALY, SAFE ou Indéterminé</td></tr>
+    <tr><td>Raisons</td><td>Explications de l'analyse (par exemple : mouvement PIR sans confirmation caméra)</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>« Analyse partielle » / INDÉTERMINÉ</strong> : une source manque, le plus souvent la webcam. Le risque n'est pas déclaré « SAFE » faute d'information suffisante. Démarrez la webcam pour une analyse complète.</li>
+  <li>La mention <strong>SIMULATION</strong> signale des données de démonstration, distinctes des mesures réelles.</li>
+  <li>Le tableau <strong>Événements IA récents</strong> conserve l'historique des analyses, consultable même si le service s'interrompt.</li>
+</ul>
+<div class="warn"><p>Les scores sont des aides à la décision, pas des certitudes. Tant que le modèle n'a pas été entraîné sur les mesures de votre site, le panneau l'indique et la détection d'anomalies reste inactive.</p></div>
+
+<h2 id="camera"><span class="num">5</span> Page Caméra</h2>
+<p>La caméra utilisée est la <strong>webcam du PC serveur</strong> : votre navigateur ne demande jamais l'accès à votre propre caméra.</p>
+<figure class="half">
+  <img src="assets/camera-full.png" alt="Page Caméra" style="max-height:112mm">
+  <figcaption><b>Figure 8.</b> Page Caméra, webcam arrêtée. Ici, le modèle facial n'est pas encore installé sur le serveur.</figcaption>
+</figure>
+<ol class="steps">
+  <li>Cliquez sur <strong>Démarrer la webcam</strong> dans le panneau « Flux vidéo ». Le bouton affiche « Démarrage de la webcam… » le temps que la première image soit prête (quelques secondes).</li>
+  <li>Le flux apparaît. Les personnes détectées sont encadrées directement sur l'image.</li>
+  <li>Le panneau <strong>Détection de personnes</strong> indique le nombre de personnes, la confiance et si la détection est <strong>confirmée</strong> (plusieurs images consécutives), avec l'historique des analyses.</li>
+  <li>Cliquez sur <strong>Arrêter la webcam</strong> pour libérer la caméra. En cas d'erreur, le bouton <strong>Réessayer</strong> relance la connexion.</li>
+</ol>
+<p>Une personne confirmée par la caméra <strong>et</strong> par le détecteur de mouvement du boîtier donne le niveau de risque le plus élevé et la meilleure confiance.</p>
+
+<h2 id="visages"><span class="num">6</span> Reconnaissance faciale</h2>
+<p>Le panneau « Reconnaissance faciale » identifie les visages filmés par comparaison avec un catalogue de personnes autorisées. Il affiche les visages courants (nom ou <strong>Inconnu</strong>, score, heure) et les dernières reconnaissances.</p>
+<h3>Ajouter une personne au catalogue</h3>
+<figure class="half">
+  <img src="assets/face-enroll.png" alt="Formulaire Ajouter une personne">
+  <figcaption><b>Figure 9.</b> Formulaire « Ajouter une personne ».</figcaption>
+</figure>
+<ol class="steps">
+  <li>Saisissez le <strong>nom</strong> à afficher (lettres, chiffres, espaces, tirets, apostrophes ; 64 caractères au plus).</li>
+  <li>Cliquez sur <strong>Choisir des photos</strong> et sélectionnez <strong>1 à 5 photos</strong> de la même personne (JPEG, PNG ou WebP). Trois à cinq photos nettes, de face, sous des éclairages légèrement différents, donnent les meilleurs résultats.</li>
+  <li>Vérifiez les aperçus ; retirez une photo si besoin.</li>
+  <li>Cliquez sur <strong>Enregistrer la personne</strong>. Le bilan indique les photos acceptées et, pour chaque photo refusée, la raison (aucun visage, plusieurs visages, visage trop petit, fichier illisible). Les photos refusées restent sélectionnées pour être remplacées.</li>
+</ol>
+<ul>
+  <li>Limites : 5 Mio par photo, 15 Mio par envoi, 4 096 pixels par côté.</li>
+  <li>Réutiliser un nom existant <strong>ajoute</strong> des photos à cette personne, sans effacer les précédentes.</li>
+  <li>La webcam peut rester arrêtée pendant l'ajout. Le catalogue est mis à jour immédiatement.</li>
+  <li><strong>Recharger les visages connus</strong> sert seulement après une modification manuelle des photos sur le serveur.</li>
+</ul>
+<div class="warn"><p>Le score affiché est une ressemblance, pas une preuve d'identité. La reconnaissance peut échouer de profil, de loin ou dans l'obscurité. Elle ne doit pas être l'unique mesure de sécurité. Ajoutez uniquement des personnes ayant donné leur accord : les photos sont des données personnelles.</p></div>
+<p>Le panneau « Résultats du service facial externe » affiche les détections envoyées par un éventuel service de reconnaissance complémentaire.</p>
+
+<h2 id="parametres"><span class="num">7</span> Page Paramètres</h2>
+<figure class="half">
+  <img src="assets/settings-full.png" alt="Page Paramètres">
+  <figcaption><b>Figure 10.</b> Paramètres des notifications par e-mail.</figcaption>
+</figure>
+<ol class="steps">
+  <li>Saisissez l'<strong>adresse e-mail de réception</strong> des alertes.</li>
+  <li>Cochez <strong>Activer les notifications par e-mail</strong>.</li>
+  <li>Choisissez les alertes envoyées : <strong>Intrusion</strong> (mouvement détecté), <strong>Visage inconnu</strong>, <strong>Boîtier hors ligne</strong> (aucune mesure depuis 30 secondes).</li>
+  <li>Cliquez sur <strong>Enregistrer</strong>, puis sur <strong>Envoyer un e-mail de test</strong> pour vérifier la réception.</li>
+</ol>
+<ul>
+  <li>Les notifications sont envoyées <strong>uniquement par e-mail</strong>, à une seule adresse partagée par tous les opérateurs.</li>
+  <li>Un même type d'alerte est envoyé au plus une fois toutes les <strong>5 minutes</strong> ; l'e-mail de test, au plus toutes les 30 secondes.</li>
+  <li>Si un message indique qu'aucun serveur d'envoi n'est configuré, les e-mails ne partiront pas : prévenez l'administrateur.</li>
+</ul>
+
+<h2 id="affichage"><span class="num">8</span> Thème sombre et mobile</h2>
+<p>Le dashboard suit le thème de votre système ; l'icône lune/soleil permet de le changer, et votre choix est mémorisé sur le poste. L'affichage s'adapte aussi aux écrans de tablette et de téléphone.</p>
+<div class="grid-2">
+  <figure>
+    <img src="assets/metrics-dark.png" alt="Thème sombre" style="max-height:72mm">
+    <figcaption><b>Figure 11.</b> Thème sombre.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/metrics-mobile.png" alt="Affichage mobile" style="max-height:72mm">
+    <figcaption><b>Figure 12.</b> Affichage sur téléphone.</figcaption>
+  </figure>
+</div>
+
+<h2 id="situations"><span class="num">9</span> Situations courantes</h2>
+<table>
+  <thead><tr><th>Ce que vous voyez</th><th>Signification</th><th>Que faire ?</th></tr></thead>
+  <tbody>
+    <tr><td>Retour à l'écran de connexion</td><td>Session expirée (8 h) ou serveur redémarré</td><td>Se reconnecter</td></tr>
+    <tr><td>« Adresse e-mail ou mot de passe incorrect »</td><td>Identifiants erronés</td><td>Vérifier la saisie ; demander une réinitialisation à l'administrateur</td></tr>
+    <tr><td>« Broker MQTT déconnecté »</td><td>Plus aucune mesure ne parvient au serveur</td><td>Prévenir l'administrateur</td></tr>
+    <tr><td>Cartes du boîtier « Inconnu »</td><td>Aucune mesure depuis 30 s</td><td>Vérifier le câble USB et la passerelle</td></tr>
+    <tr><td>« Aucune donnée » sur un capteur</td><td>Préchauffage ou capteur en erreur</td><td>Attendre une minute après la mise sous tension ; sinon vérifier le capteur</td></tr>
+    <tr><td>AI ENGINE « OFFLINE »</td><td>Service d'analyse arrêté</td><td>Les mesures continuent ; prévenir l'administrateur</td></tr>
+    <tr><td>« Modèle non entraîné »</td><td>Détection d'anomalies pas encore configurée</td><td>Normal à l'installation ; voir le guide IA</td></tr>
+    <tr><td>« Modèle facial indisponible »</td><td>Modèles de reconnaissance non installés sur le serveur</td><td>Demander leur installation à l'administrateur</td></tr>
+    <tr><td>Flux vidéo indisponible / Réessayer</td><td>Webcam occupée, débranchée ou service arrêté</td><td>Cliquer sur Réessayer ; fermer les autres applications vidéo du serveur</td></tr>
+    <tr><td>Mention SIMULATION</td><td>Données de démonstration</td><td>Ne pas les interpréter comme des mesures réelles</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

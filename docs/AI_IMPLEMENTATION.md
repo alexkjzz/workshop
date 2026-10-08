@@ -4,7 +4,7 @@ Le dossier `ai/` et son integration backend/frontend sont implementes.
 Les mecanismes deja presents restent les points d'entree : MQTT pour l'ESP8266,
 SQLite pour les mesures, Better Auth pour le dashboard, SSE pour le temps reel,
 et le proxy MJPEG pour la video. Le firmware courant utilise une passerelle
-USB ; la variante reseau archivee reste independante.
+USB.
 
 L'inventaire exhaustif des fichiers crees et modifies est dans
 [AI_FILES.md](AI_FILES.md). Les commandes PowerShell, schemas et depannage
@@ -124,8 +124,7 @@ dans [FACE_RECOGNITION.md](FACE_RECOGNITION.md).
 - Collecter et selectionner un historique **normal reel**, entrainer le modele,
   puis evaluer les faux positifs et la derive des capteurs.
 - Verifier les mesures USB, le port serie, les prechauffages et la reconnexion
-  selon [le guide ESP USB](esp-serial.md). Pour l'ancienne variante reseau,
-  verifier separement le broker MQTTS, les certificats et les identifiants.
+  selon [le guide ESP USB](esp-serial.md).
 - Evaluer les performances et les faux positifs de YOLO sur des sequences
   representatives et verifier le flux, les boutons React et la reprise camera.
 

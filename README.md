@@ -16,6 +16,28 @@ Mosquitto pour MQTT, et PlatformIO pour compiler le firmware. Les procedures
 d'installation sont ci-dessous ; [le guide GitHub](docs/GITHUB.md) explique
 comment partager le projet sans les donnees et secrets locaux.
 
+## Documentation PDF
+
+Les documentations techniques et d'utilisation des quatre projets sont dans
+[`docs/pdf/`](docs/pdf/) :
+
+| Projet | Documentation technique | Guide d'utilisation |
+| --- | --- | --- |
+| Firmware ESP8266 et passerelle USB | `Sentinel-X_Firmware_Documentation-technique.pdf` | `Sentinel-X_Firmware_Guide-utilisation.pdf` |
+| Backend `iot-backend` | `Sentinel-X_Backend_Documentation-technique.pdf` | `Sentinel-X_Backend_Guide-utilisation.pdf` |
+| Dashboard `iot-frontend` | `Sentinel-X_Frontend_Documentation-technique.pdf` | `Sentinel-X_Frontend_Guide-utilisation.pdf` |
+| Service IA `ai` | `Sentinel-X_IA_Documentation-technique.pdf` | `Sentinel-X_IA_Guide-utilisation.pdf` |
+
+Les sources HTML, la feuille de style d'impression et les captures sont dans
+[`docs/pdf-src/`](docs/pdf-src/). Apres une evolution du code, mettre a jour la
+source concernee puis regenerer les PDF (Chrome, Edge ou Chromium requis ;
+`DOCS_BROWSER` permet de choisir l'executable) :
+
+```sh
+node scripts/build-docs-pdf.mjs                       # tous les documents
+node scripts/build-docs-pdf.mjs --only ai-technique   # un seul document
+```
+
 ## Sentinel-X : intelligence artificielle et Windows
 
 Le service Python local se trouve dans [`ai/`](ai/README.md) : Isolation Forest,
@@ -177,7 +199,6 @@ gestionnaire de paquets du systeme avant de lancer `bash install.sh`.
 - `iot-backend/` : API Express, MQTT, historique SQLite, voir [iot-backend/README.md](iot-backend/README.md).
 - `iot-frontend/` : application React/Vite (pages Metriques et Camera), voir [iot-frontend/README.md](iot-frontend/README.md).
 - `firmware/` : firmware ESP8266 actuel (PlatformIO, capteurs/OLED et sortie serie USB).
-- `firmware-old/` : ancienne version reseau ; le flux USB actuel ne l'utilise pas.
 - `scripts/esp_serial_bridge.py` : passerelle des mesures serie vers le backend MQTT.
 - `install.sh`, `run.sh`, `stop.sh` : installation, demarrage et arret.
 - `docker-compose.yml` : stack web conteneurisee (voir [Docker](#docker)).
@@ -444,10 +465,6 @@ Le broker reste local ; aucun acces Wi-Fi de la carte au broker n'est necessaire
 Arreter le simulateur avant de recevoir les mesures reelles pour ne pas melanger
 leurs origines. Les LEDs et le buzzer sont commandes localement par le firmware ;
 les boutons LED du dashboard necessitent un firmware MQTT compatible.
-
-`firmware-old/` conserve l'ancienne variante reseau. Son utilisation demande
-une configuration Wi-Fi, un broker accessible, ses certificats et identifiants ;
-elle n'est pas utilisee par la passerelle USB actuelle.
 
 La configuration du backend par variables d'environnement est detaillee dans
 [iot-backend/README.md](iot-backend/README.md). Pour personnaliser les ports ou

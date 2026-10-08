@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Firmware ESP8266 · Documentation technique</title>
+<meta name="pdf-name" content="Sentinel-X_Firmware_Documentation-technique.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Documentation technique</div>
+  <h1 class="outline-title">Firmware ESP8266 et passerelle USB</h1>
+  <div class="cover-title" aria-hidden="true">Firmware ESP8266 et passerelle USB</div>
+  <p class="cover-subtitle">Acquisition des capteurs DHT22, MQ-2 et PIR, alarmes locales, affichage OLED et transmission des mesures vers la plateforme par USB série.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Composants</dt><dd><code style="background:none;color:#fff">firmware/</code> (C++ / PlatformIO) et <code style="background:none;color:#fff">scripts/esp_serial_bridge.py</code></dd>
+    <dt>Public</dt><dd>Développeurs IoT, intégrateurs et jury technique</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#perimetre">Rôle et périmètre<span>Place du firmware dans la chaîne Sentinel-X</span></a></li>
+    <li><a href="#materiel">Matériel et câblage<span>Carte, capteurs, sorties, brochage</span></a></li>
+    <li><a href="#architecture">Architecture logicielle<span>Couches, ports et adaptateurs, fichiers</span></a></li>
+    <li><a href="#logique">Logique de fonctionnement<span>Cadencement, préchauffage, seuils, alarmes</span></a></li>
+    <li><a href="#interfaces">Interfaces locales<span>Écran OLED et contrat série USB</span></a></li>
+    <li><a href="#passerelle">Passerelle USB vers MQTT<span>Validation, format JSON, robustesse</span></a></li>
+    <li><a href="#configuration">Configuration<span>Constantes et options de compilation</span></a></li>
+    <li><a href="#qualite">Compilation, tests et CI<span>Tests natifs, doubles matériels, pipeline</span></a></li>
+    <li><a href="#limites">Limites connues<span>Ce que le firmware ne garantit pas</span></a></li>
+  </ol>
+</section>
+
+<h2 id="perimetre" style="margin-top:0"><span class="num">1</span> Rôle et périmètre</h2>
+<p>Le firmware s'exécute sur l'unique microcontrôleur <strong>ESP8266 (NodeMCU v2)</strong> du boîtier Sentinel-X. Il mesure l'environnement, décide localement des alarmes physiques et affiche un état lisible sur l'écran OLED. Il publie un instantané complet de son état sur le port série USB toutes les secondes.</p>
+<p>Cette version ne contient <strong>ni pile Wi-Fi ni client MQTT</strong>. Les mesures rejoignent la plateforme par une passerelle Python (<code>scripts/esp_serial_bridge.py</code>), exécutée sur le PC Serveur Local. Elle lit le port série, valide chaque bloc et republie les mesures sur le broker MQTT local consommé par le backend.</p>
+
+<figure class="diagram">
+<svg viewBox="0 0 760 236" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6575"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="40" width="130" height="62" rx="8" fill="#2b62d9"/><text x="75" y="66" fill="#fff" font-weight="700">ESP8266</text><text x="75" y="84" fill="#dbe6ff" font-size="9.5">Firmware (ce document)</text>
+    <rect x="165" y="40" width="130" height="62" rx="8" fill="#2b62d9"/><text x="230" y="66" fill="#fff" font-weight="700">Passerelle USB</text><text x="230" y="84" fill="#dbe6ff" font-size="9.5">Python (ce document)</text>
+    <rect x="320" y="40" width="110" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="375" y="66" font-weight="700" fill="#142033">Mosquitto</text><text x="375" y="84" fill="#5b6575" font-size="9.5">Broker MQTT local</text>
+    <rect x="455" y="40" width="140" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="525" y="66" font-weight="700" fill="#142033">Backend Express</text><text x="525" y="84" fill="#5b6575" font-size="9.5">API, SQLite, SSE</text>
+    <rect x="620" y="40" width="130" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="685" y="66" font-weight="700" fill="#142033">Dashboard React</text><text x="685" y="84" fill="#5b6575" font-size="9.5">Navigateur</text>
+    <rect x="455" y="160" width="140" height="56" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="525" y="184" font-weight="700" fill="#142033">Service IA FastAPI</text><text x="525" y="201" fill="#5b6575" font-size="9.5">Anomalies, vision, risque</text>
+    <rect x="10" y="160" width="130" height="56" rx="8" fill="#fff" stroke="#c9d1de" stroke-dasharray="4 3"/><text x="75" y="184" font-weight="700" fill="#142033">Capteurs</text><text x="75" y="201" fill="#5b6575" font-size="9.5">DHT22 · MQ-2 · PIR</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.6" fill="none" marker-end="url(#a1)">
+    <line x1="140" y1="71" x2="163" y2="71"/><line x1="295" y1="71" x2="318" y2="71"/><line x1="430" y1="71" x2="453" y2="71"/><line x1="595" y1="71" x2="618" y2="71"/>
+    <line x1="75" y1="160" x2="75" y2="104"/><line x1="525" y1="104" x2="525" y2="158"/>
+  </g>
+  <g font-size="9" fill="#5b6575" text-anchor="middle">
+    <text x="152" y="32">USB</text><text x="307" y="32">MQTT</text><text x="442" y="32">MQTT</text><text x="607" y="32">HTTP/SSE</text><text x="98" y="136" text-anchor="start">GPIO / ADC</text><text x="533" y="136" text-anchor="start">HTTP local</text>
+  </g>
+</svg>
+<figcaption><b>Figure 1.</b> Chaîne de mesure Sentinel-X. Les éléments en bleu sont décrits dans ce document.</figcaption>
+</figure>
+
+<div class="note"><p>Le firmware reste <strong>maître de ses alarmes</strong> : LEDs et buzzer réagissent sans réseau ni PC. La passerelle est en lecture seule ; elle n'envoie jamais d'ordre à la carte.</p></div>
+
+<h2 id="materiel"><span class="num">2</span> Matériel et câblage</h2>
+<p>La configuration matérielle est centralisée dans <code>firmware/include/sentinel_config.h</code>. Les broches ci-dessous sont les valeurs par défaut. Toutes les sorties sont <strong>actives à l'état haut</strong>, pour des LEDs externes avec résistance série.</p>
+<table>
+  <thead><tr><th>Élément</th><th>Broche NodeMCU</th><th>GPIO</th><th>Rôle et remarques</th></tr></thead>
+  <tbody>
+    <tr><td>DHT22 (température, humidité)</td><td>D5</td><td>14</td><td>Type configurable (<code>DHT_TYPE</code>). Lecture toutes les 2 s minimum.</td></tr>
+    <tr><td>PIR HC-SR501 (présence)</td><td>D6</td><td>12</td><td>Entrée numérique ; calibration logicielle de 45 s au démarrage.</td></tr>
+    <tr><td>MQ-2 (gaz, fumées)</td><td>A0</td><td>ADC</td><td>Valeur brute 0–1023 (moyenne de 8 lectures). Pas une concentration en ppm.</td></tr>
+    <tr><td>Buzzer</td><td>D7</td><td>13</td><td>Actif pendant une alarme.</td></tr>
+    <tr><td>LED verte (système OK)</td><td>D0</td><td>16</td><td>Allumée quand tout est prêt, valide et sans alarme.</td></tr>
+    <tr><td>LED rouge (alarme)</td><td>D4</td><td>2</td><td>Partage la broche de la LED intégrée, dont la polarité peut être inversée.</td></tr>
+    <tr><td>LED orange (avertissement)</td><td>D8</td><td>15</td><td>Doit rester à l'état bas au démarrage (contrainte de boot de l'ESP8266).</td></tr>
+    <tr><td>OLED SSD1306 128×64 (SDA)</td><td>D2</td><td>4</td><td>Bus I2C à 100 kHz, adresse <code>0x3C</code>, affichage tourné de 180°.</td></tr>
+    <tr><td>OLED SSD1306 (SCL)</td><td>D1</td><td>5</td><td>Présence vérifiée par acquittement I2C.</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>La sortie analogique du MQ-2 alimenté en 5 V peut dépasser la plage de l'entrée A0. Vérifier le pont diviseur du module ou en ajouter un. D8/GPIO15 ne doit jamais être tiré vers le haut au démarrage, sinon la carte ne boote pas.</p></div>
+<p>Bibliothèques (déclarées dans <code>platformio.ini</code>) : <strong>Adafruit GFX</strong>, <strong>Adafruit SSD1306</strong> et <strong>DHT sensor library</strong>. La cible est <code>env:nodemcuv2</code> (plateforme <code>espressif8266</code>, framework Arduino, moniteur série à 115 200 bauds).</p>
+
+<h2 id="architecture"><span class="num">3</span> Architecture logicielle</h2>
+<p>Le code suit une séparation <strong>ports et adaptateurs</strong> : la logique métier ne connaît que des interfaces abstraites, et les pilotes matériels les implémentent. On peut ainsi compiler et tester la logique sur un ordinateur, avec des doubles matériels.</p>
+
+<figure class="diagram">
+<svg viewBox="0 0 760 262" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6575"/></marker></defs>
+  <g font-size="11">
+    <rect x="10" y="10" width="740" height="52" rx="8" fill="#f4f6fa" stroke="#c9d1de"/>
+    <text x="24" y="32" font-weight="700" fill="#142033">Composition — src/main.cpp</text>
+    <text x="24" y="50" fill="#5b6575" font-size="9.5">Instancie BoardSensors, GpioActuators, OledDisplay et les injecte dans Sentinel ; appelle tick(millis()) en boucle.</text>
+    <rect x="10" y="84" width="740" height="66" rx="8" fill="#e8efff" stroke="#9fb7ee"/>
+    <text x="24" y="106" font-weight="700" fill="#1f4fae">Application — lib/sentinel_core/src/application</text>
+    <text x="24" y="124" fill="#2c3b57" font-size="9.5">Sentinel : cadencement, préchauffage, hystérésis gaz, décision des sorties, bloc série.</text>
+    <text x="24" y="140" fill="#2c3b57" font-size="9.5">ports.h : Readings, DeviceStatus, ActuatorOutputs et interfaces Sensors · Actuators · DisplayPort.</text>
+    <rect x="10" y="172" width="236" height="66" rx="8" fill="#fff" stroke="#c9d1de"/>
+    <text x="24" y="194" font-weight="700" fill="#142033">BoardSensors</text>
+    <text x="24" y="212" fill="#5b6575" font-size="9.5">DHT (validation), MQ-2 (moyenne),</text><text x="24" y="226" fill="#5b6575" font-size="9.5">PIR — implémente Sensors</text>
+    <rect x="262" y="172" width="236" height="66" rx="8" fill="#fff" stroke="#c9d1de"/>
+    <text x="276" y="194" font-weight="700" fill="#142033">GpioActuators</text>
+    <text x="276" y="212" fill="#5b6575" font-size="9.5">3 LEDs + buzzer, ordre de démarrage</text><text x="276" y="226" fill="#5b6575" font-size="9.5">sûr — implémente Actuators</text>
+    <rect x="514" y="172" width="236" height="66" rx="8" fill="#fff" stroke="#c9d1de"/>
+    <text x="528" y="194" font-weight="700" fill="#142033">OledDisplay</text>
+    <text x="528" y="212" fill="#5b6575" font-size="9.5">SSD1306, contrôle d'ACK I2C, reprise</text><text x="528" y="226" fill="#5b6575" font-size="9.5">toutes les 5 s — implémente DisplayPort</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.5" marker-end="url(#a2)">
+    <line x1="128" y1="172" x2="128" y2="152"/><line x1="380" y1="172" x2="380" y2="152"/><line x1="632" y1="172" x2="632" y2="152"/><line x1="380" y1="62" x2="380" y2="82"/>
+  </g>
+  <text x="380" y="256" font-size="9.5" fill="#5b6575" text-anchor="middle">Infrastructure — lib/sentinel_core/src/infrastructure (adaptateurs matériels)</text>
+</svg>
+<figcaption><b>Figure 2.</b> Couches du firmware. Les flèches indiquent le sens des dépendances : les adaptateurs dépendent des ports, jamais l'inverse.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th>Fichier</th><th>Responsabilité</th></tr></thead>
+  <tbody>
+    <tr><td><code>include/sentinel_config.h</code></td><td>Configuration canonique : broches, type DHT, seuils, intervalles, préchauffages, assertions de compilation. <code>config.h</code> n'est qu'un alias.</td></tr>
+    <tr><td><code>src/main.cpp</code></td><td>Point d'entrée Arduino et composition des objets (<code>setup()</code>, <code>loop()</code>).</td></tr>
+    <tr><td><code>application/ports.h</code></td><td>Structures de données et interfaces abstraites.</td></tr>
+    <tr><td><code>application/sentinel.{h,cpp}</code></td><td>Orchestrateur non bloquant ; toute la logique de décision.</td></tr>
+    <tr><td><code>infrastructure/board_sensors.*</code></td><td>Lecture et validation DHT, moyenne MQ-2, lecture PIR.</td></tr>
+    <tr><td><code>infrastructure/gpio_actuators.*</code></td><td>Initialisation sûre des sorties et application des états.</td></tr>
+    <tr><td><code>infrastructure/oled_display.*</code></td><td>Rendu de l'écran, détection et reconnexion de l'OLED.</td></tr>
+    <tr><td><code>tests/</code></td><td>Tests natifs C++ (<code>test_firmware.cpp</code>), doubles Arduino/DHT/I2C (<code>stubs/</code>), lanceur <code>run_native.py</code>.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="logique"><span class="num">4</span> Logique de fonctionnement</h2>
+<h3>4.1 Boucle non bloquante</h3>
+<p><code>Sentinel::tick(nowMs)</code> est appelée à chaque passage de <code>loop()</code>. Chaque tâche a sa propre échéance calculée par différence (<code>now - last &gt;= intervalle</code>), ce qui reste correct après le débordement de <code>millis()</code> (environ 49,7 jours).</p>
+<table>
+  <thead><tr><th>Tâche</th><th>Période</th><th>Détail</th></tr></thead>
+  <tbody>
+    <tr><td>PIR</td><td>chaque tick</td><td>Lecture numérique ; transitions journalisées (« MOUVEMENT DETECTE », « retour NORMAL »).</td></tr>
+    <tr><td>Gaz MQ-2</td><td>250 ms</td><td>Moyenne de 8 lectures ADC espacées de 300 µs.</td></tr>
+    <tr><td>DHT</td><td>2 000 ms</td><td>Première lecture 2 s après le démarrage, puis toutes les 2 s (assertion de compilation ≥ 2 s).</td></tr>
+    <tr><td>Sorties</td><td>chaque tick</td><td>Recalcul des LEDs et du buzzer à partir de l'état courant.</td></tr>
+    <tr><td>OLED</td><td>300 ms</td><td>Rafraîchissement de l'écran.</td></tr>
+    <tr><td>Bloc série</td><td>1 000 ms</td><td>Instantané complet pour la passerelle.</td></tr>
+  </tbody>
+</table>
+
+<h3>4.2 Préchauffage et validité des mesures</h3>
+<ul>
+  <li><strong>PIR</strong> : ignoré pendant <strong>45 s</strong> (calibration du HC-SR501), présence forcée à faux.</li>
+  <li><strong>MQ-2</strong> : alerte inhibée pendant <strong>60 s</strong> (chauffe). La fin de chauffe est mémorisée et survit au débordement de <code>millis()</code> ; un nouvel appel à <code>begin()</code> la réinitialise.</li>
+  <li><strong>DHT</strong> : une lecture est valide si température et humidité sont finies, et dans les plages −40…80 °C et 0…100 %. Sinon les deux valeurs sont effacées (<code>NAN</code>) : une ancienne mesure n'est jamais réutilisée derrière une erreur.</li>
+</ul>
+
+<h3>4.3 Seuils de gaz avec hystérésis</h3>
+<p>L'alerte gaz passe à vrai quand la valeur moyenne atteint <strong>600</strong>, et revient à faux quand elle redescend à <strong>550</strong> ou moins (bornes incluses). L'écart évite le clignotement autour du seuil. Les deux seuils sont vérifiés à la compilation (0 ≤ OFF &lt; ON ≤ 1023).</p>
+
+<h3>4.4 Décision des sorties</h3>
+<p>Les sorties sont recalculées à chaque tick selon la priorité suivante : rouge, puis orange, puis verte.</p>
+<pre><code>alarmActive   = gasAlert OR motionDetected
+warningActive = NOT alarmActive AND (NOT systemReady OR NOT climateValid)
+systemOK      = systemReady AND climateValid AND NOT alarmActive
+
+LED rouge = alarmActive · buzzer = alarmActive
+LED orange = warningActive · LED verte = systemOK</code></pre>
+<table>
+  <thead><tr><th>Situation</th><th>Rouge</th><th>Orange</th><th>Verte</th><th>Buzzer</th></tr></thead>
+  <tbody>
+    <tr><td>Démarrage (préchauffage en cours)</td><td>—</td><td>●</td><td>—</td><td>—</td></tr>
+    <tr><td>Erreur DHT, sans alarme</td><td>—</td><td>●</td><td>—</td><td>—</td></tr>
+    <tr><td>Surveillance normale</td><td>—</td><td>—</td><td>●</td><td>—</td></tr>
+    <tr><td>Mouvement détecté (après 45 s)</td><td>●</td><td>—</td><td>—</td><td>●</td></tr>
+    <tr><td>Alerte gaz (après 60 s)</td><td>●</td><td>—</td><td>—</td><td>●</td></tr>
+  </tbody>
+</table>
+<div class="note"><p>Une erreur DHT allume l'avertissement mais <strong>ne désactive pas</strong> les alarmes gaz et mouvement. Une température élevée, à elle seule, ne déclenche pas le buzzer : l'analyse environnementale relève du service IA.</p></div>
+
+<h2 id="interfaces"><span class="num">5</span> Interfaces locales</h2>
+<h3>5.1 Écran OLED</h3>
+<p>Au démarrage, un écran d'accueil « SENTINEL X — SECURITY SYSTEM — BOOTING… » s'affiche. Ensuite, l'écran présente :</p>
+<ul>
+  <li>un bandeau avec l'état global : <code>OK</code>, <code>...</code> (préchauffage), <code>ERR</code> (DHT invalide) ou <code>AL!</code> (alarme) ;</li>
+  <li>la température et l'humidité en grands caractères, ou <code>--.-C</code> / <code>--%</code> si la mesure est invalide ;</li>
+  <li>l'état du gaz (<code>WARM</code>, <code>NORMAL</code>, <code>DANGER</code>), sa valeur brute et une barre graphique avec le repère du seuil d'alerte ;</li>
+  <li>l'état du PIR (<code>PIR...</code>, <code>PIR OK</code>, <code>MOVE!</code>) ;</li>
+  <li>une ligne de message clignotante en alarme (<code>!!! GAS ALERT !!!</code>, <code>!! MOTION ALERT !!</code>, <code>!! GAS + MOTION !!</code>), sinon <code>STARTING...</code>, <code>DHT SENSOR ERROR</code> ou <code>MONITORING</code>.</li>
+</ul>
+<p>La présence de l'écran est vérifiée par un acquittement I2C, à l'initialisation puis à chaque rafraîchissement. Sans écran, le firmware le signale sur le port série, retente une connexion toutes les 5 s et <strong>continue de gérer les alarmes</strong>.</p>
+
+<h3>5.2 Contrat série USB</h3>
+<p>Toutes les secondes, le firmware écrit un bloc délimité à <strong>115 200 bauds</strong>. Ce format est le contrat d'interface avec la passerelle : toute modification doit être répercutée dans <code>esp_serial_bridge.py</code> et ses tests.</p>
+<pre><code>========= SENTINEL-X =========
+Temperature : 24.4 C
+Humidite    : 61.1 %
+Gaz MQ-2    : 40
+Etat gaz    : NORMAL
+Etat PIR    : MOUVEMENT
+ALARME      : ACTIVE
+LED ROUGE   : ON
+LED ORANGE  : OFF
+LED VERTE   : OFF
+==============================</code></pre>
+<table>
+  <thead><tr><th>Ligne</th><th>Valeurs possibles</th></tr></thead>
+  <tbody>
+    <tr><td>Temperature / Humidite</td><td>nombre à une décimale suivi de <code>C</code> / <code>%</code>, ou <code>ERREUR</code></td></tr>
+    <tr><td>Gaz MQ-2</td><td>entier 0–1023 (valeur ADC brute)</td></tr>
+    <tr><td>Etat gaz</td><td><code>CHAUFFE</code>, <code>NORMAL</code>, <code>DANGER</code></td></tr>
+    <tr><td>Etat PIR</td><td><code>CALIBRATION</code>, <code>NORMAL</code>, <code>MOUVEMENT</code></td></tr>
+    <tr><td>ALARME</td><td><code>ACTIVE</code>, <code>OFF</code></td></tr>
+    <tr><td>LED ROUGE / ORANGE / VERTE</td><td><code>ON</code>, <code>OFF</code></td></tr>
+  </tbody>
+</table>
+<p>Les autres lignes écrites hors bloc (démarrage, transitions PIR, alertes gaz, diagnostics DHT et OLED) servent au diagnostic humain et sont ignorées par la passerelle.</p>
+
+<h2 id="passerelle"><span class="num">6</span> Passerelle USB vers MQTT</h2>
+<p><code>scripts/esp_serial_bridge.py</code> relie le port série au broker MQTT. Elle dépend de <code>pyserial</code> et <code>paho-mqtt</code> (<code>scripts/requirements-esp.txt</code>).</p>
+<h3>6.1 Analyse et validation</h3>
+<ul>
+  <li>Seuls les blocs <strong>complets</strong> entre les deux délimiteurs sont acceptés, avec exactement les neuf champs attendus et sans doublon.</li>
+  <li>Un bloc qui dure plus de <strong>3 s</strong>, une ligne de plus de <strong>256 octets</strong>, une valeur malformée ou hors plage invalident le bloc. L'analyseur se resynchronise sur l'en-tête suivant.</li>
+  <li>Les lignes fragmentées par les délais de lecture USB sont réassemblées, avec des limites de taille et de temps.</li>
+  <li>Plages vérifiées : température −40…80 °C, humidité 0…100 %, gaz entier 0…1023.</li>
+</ul>
+<h3>6.2 Message MQTT produit</h3>
+<p>Topic par défaut <code>esp8266/donnees</code>, QoS 0, sans rétention. <code>ts</code> est l'heure Unix de réception du bloc par le PC.</p>
+<pre><code>{ "source": "live", "device": "sentinel-x-01", "ts": 1791370000.5,
+  "temperature": 24.4, "humidity": 61.1, "gas": 40, "presence": true,
+  "climateValid": true, "gasReady": true, "pirReady": true, "gasAlert": false,
+  "alarmActive": true, "ledRed": true, "ledOrange": false, "ledGreen": false }</code></pre>
+<table>
+  <thead><tr><th>Condition firmware</th><th>Effet sur le message</th></tr></thead>
+  <tbody>
+    <tr><td>DHT en <code>ERREUR</code></td><td><code>climateValid=false</code> ; température et humidité omises</td></tr>
+    <tr><td>Gaz en <code>CHAUFFE</code></td><td><code>gasReady=false</code> ; valeur de gaz omise</td></tr>
+    <tr><td>PIR en <code>CALIBRATION</code></td><td><code>pirReady=false</code> ; présence omise</td></tr>
+    <tr><td>Tous les capteurs indisponibles</td><td>seuls les huit indicateurs booléens sont envoyés ; aucune valeur fictive</td></tr>
+  </tbody>
+</table>
+<h3>6.3 Robustesse</h3>
+<ul>
+  <li><strong>Sélection du port</strong> : sans <code>--port</code>, choix automatique uniquement s'il existe un seul port USB plausible (ports Bluetooth exclus). La sélection est refaite après une déconnexion, même si Windows change le numéro COM. Un port imposé n'est jamais remplacé.</li>
+  <li><strong>Reconnexion</strong> automatique USB et MQTT. À l'ouverture du port, les octets en attente sont écartés et les lignes DTR/RTS laissées inactives.</li>
+  <li><strong>Pas d'historique hors ligne</strong> : seul le dernier bloc est conservé, pendant 2 s au plus. Un message expiré est abandonné et l'horodatage n'est jamais rafraîchi lors d'une reconnexion.</li>
+  <li><strong>Diagnostic</strong> : avertissement si le port est ouvert sans bloc valide pendant 10 s, puis au plus toutes les 30 s.</li>
+</ul>
+<table>
+  <thead><tr><th>Option</th><th>Défaut</th><th>Usage</th></tr></thead>
+  <tbody>
+    <tr><td><code>--port</code></td><td>auto</td><td>Port série imposé (<code>COM7</code>, <code>/dev/ttyUSB0</code>…)</td></tr>
+    <tr><td><code>--baud</code></td><td>115200</td><td>Débit série</td></tr>
+    <tr><td><code>--mqtt-host</code> / <code>--mqtt-port</code></td><td>127.0.0.1 / 1883</td><td>Broker cible</td></tr>
+    <tr><td><code>--mqtt-topic</code></td><td>esp8266/donnees</td><td>Topic de télémétrie lu par le backend</td></tr>
+    <tr><td><code>--device</code></td><td>sentinel-x-01</td><td>Identifiant inclus dans chaque message</td></tr>
+    <tr><td><code>--list-ports</code></td><td>—</td><td>Liste les ports détectés et quitte</td></tr>
+    <tr><td><code>--max-messages</code></td><td>illimité</td><td>Arrêt après N envois (diagnostic)</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>La passerelle cible un broker local sans authentification ni TLS (<code>scripts/mosquitto-local.conf</code> écoute uniquement sur <code>127.0.0.1</code>). Il ne doit pas être exposé sur le réseau.</p></div>
+
+<h2 id="configuration"><span class="num">7</span> Configuration</h2>
+<p>Toutes les constantes sont dans <code>sentinel_config.h</code>. Seuls <code>PIN_DHT</code> et <code>DHT_TYPE</code> peuvent être surchargés à la compilation sans modifier le fichier.</p>
+<table>
+  <thead><tr><th>Constante</th><th>Valeur</th><th>Signification</th></tr></thead>
+  <tbody>
+    <tr><td><code>DHT_TYPE</code></td><td>DHT22</td><td>Types acceptés : 11, 12, 21, 22 (assertion de compilation)</td></tr>
+    <tr><td><code>GAS_THRESHOLD_ON</code> / <code>OFF</code></td><td>600 / 550</td><td>Hystérésis de l'alerte gaz (ADC brut)</td></tr>
+    <tr><td><code>DHT_INTERVAL_MS</code></td><td>2000</td><td>Période minimale du DHT</td></tr>
+    <tr><td><code>GAS_INTERVAL_MS</code></td><td>250</td><td>Période de lecture du MQ-2</td></tr>
+    <tr><td><code>DISPLAY_INTERVAL_MS</code></td><td>300</td><td>Rafraîchissement OLED</td></tr>
+    <tr><td><code>SERIAL_INTERVAL_MS</code></td><td>1000</td><td>Période du bloc série</td></tr>
+    <tr><td><code>PIR_WARMUP_MS</code> / <code>GAS_WARMUP_MS</code></td><td>45 000 / 60 000</td><td>Calibration PIR et chauffe MQ-2</td></tr>
+    <tr><td><code>OLED_ADDRESS</code></td><td>0x3C</td><td>Adresse I2C de l'écran</td></tr>
+  </tbody>
+</table>
+<p>Pour adapter un capteur dont le type et le câblage ont été vérifiés, ajouter dans <code>platformio.ini</code> (le numéro de broche est un GPIO, D5 = GPIO14) :</p>
+<pre><code>build_flags =
+    -I include
+    -DDHT_TYPE=22
+    -DPIN_DHT=14</code></pre>
+<div class="note"><p>Le type configuré ne prouve pas le type physique : le firmware n'effectue aucune détection automatique. Le démarrage affiche le type, la broche et l'intervalle utilisés pour faciliter la vérification.</p></div>
+
+<h2 id="qualite"><span class="num">8</span> Compilation, tests et CI</h2>
+<pre><code># Compiler pour l'ESP8266 (sans téléverser)
+pio run -d firmware -e nodemcuv2
+
+# Tests natifs de la logique et des adaptateurs, avec doubles matériels
+python firmware/tests/run_native.py            # g++, clang++ ou Zig détecté
+python firmware/tests/run_native.py --compiler /chemin/vers/zig
+
+# Tests de la passerelle USB (aucun matériel ni broker requis)
+python -m unittest discover -s scripts/tests -v</code></pre>
+<p>Le lanceur natif compile les <strong>vraies classes</strong> (<code>Sentinel</code>, <code>BoardSensors</code>, <code>GpioActuators</code>, <code>OledDisplay</code>) avec des doubles d'Arduino, DHT, Wire et SSD1306, en <code>-Wall -Wextra -Werror</code>. La suite s'exécute deux fois : configuration par défaut, puis surchargée (<code>DHT_TYPE=21</code>, <code>PIN_DHT=0</code>).</p>
+<table>
+  <thead><tr><th>Cas de test natif</th><th>Vérifie</th></tr></thead>
+  <tbody>
+    <tr><td>Cadence du climat</td><td>première lecture DHT à 2 s, puis période respectée</td></tr>
+    <tr><td>Préchauffage</td><td>alarmes inhibées puis activées capteur par capteur</td></tr>
+    <tr><td>Hystérésis gaz</td><td>bornes 600 / 550 incluses</td></tr>
+    <tr><td>Débordement de l'horloge</td><td>préchauffage et alarme corrects après le passage de <code>millis()</code> à zéro</td></tr>
+    <tr><td>Redémarrage</td><td><code>begin()</code> réinitialise alarme, climat et préchauffage</td></tr>
+    <tr><td>Erreur climat</td><td>avertissement sans désactiver l'alarme mouvement</td></tr>
+    <tr><td>Adaptateur DHT</td><td>conservation des observations, rejet des valeurs invalides</td></tr>
+    <tr><td>Contrat série</td><td>format exact du bloc, <code>ERREUR</code> et états de préchauffage</td></tr>
+    <tr><td>GPIO</td><td>polarité des sorties, démarrage silencieux (D8 bas)</td></tr>
+    <tr><td>OLED</td><td>ACK I2C exigé, pas de « OK » avec un climat invalide</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Vérification (état du dépôt à la génération)</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td>Tests natifs firmware</td><td><span class="pill ok">10/10 réussis</span> dans chaque configuration</td></tr>
+    <tr><td>Tests de la passerelle USB</td><td><span class="pill ok">27/27 réussis</span></td></tr>
+    <tr><td>Compilation ESP8266 (<code>nodemcuv2</code>)</td><td><span class="pill ok">réussie</span> — RAM 35,3 % (28 932 o), Flash 27,4 % (286 115 o)</td></tr>
+  </tbody>
+</table>
+<p>Le workflow GitHub Actions (<code>.github/workflows/ci.yml</code>, job <em>firmware</em>) exécute les tests natifs puis compile le firmware à chaque push et pull request. La passerelle est testée dans le job Python.</p>
+
+<h2 id="limites"><span class="num">9</span> Limites connues</h2>
+<ul>
+  <li><strong>Pas de calibration</strong> : <code>climateValid</code> indique une lecture exploitable, pas une valeur juste. Le MQ-2 reste une valeur ADC brute, sans conversion en ppm.</li>
+  <li><strong>Seuils de démonstration</strong> : 600/550 et les délais de préchauffage doivent être évalués avec le matériel réel.</li>
+  <li><strong>Transmission en lecture seule</strong> : les boutons LED du dashboard publient sur MQTT, mais le firmware USB actuel n'écoute aucune commande. Les LEDs sont pilotées localement.</li>
+  <li><strong>Pas de rejeu</strong> : une mesure perdue pendant une coupure USB ou MQTT n'est pas retransmise (QoS 0, tampon de 2 s).</li>
+  <li><strong>Sécurité du transport</strong> : le lien série et le broker local ne sont pas chiffrés ; leur protection repose sur l'isolement de la machine serveur.</li>
+  <li>Les tests natifs valident la logique et les adaptateurs, <strong>pas le câblage ni la précision physique</strong> des capteurs.</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Backend iot-backend · Documentation technique</title>
+<meta name="pdf-name" content="Sentinel-X_Backend_Documentation-technique.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Documentation technique</div>
+  <h1 class="outline-title">Backend iot-backend</h1>
+  <div class="cover-title" aria-hidden="true">Backend iot-backend</div>
+  <p class="cover-subtitle">API Express/TypeScript : ingestion MQTT, historique SQLite, temps réel SSE, authentification, relais vers le service IA, notifications par e-mail.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Pile</dt><dd>Node.js ≥ 22.13 (24 conseillé), TypeScript, Express 5, Better Auth, MQTT.js, node:sqlite, Nodemailer</dd>
+    <dt>Public</dt><dd>Développeurs backend, équipe infrastructure et jury technique</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#role">Rôle dans la plateforme<span>Point d'entrée unique du dashboard</span></a></li>
+    <li><a href="#architecture">Architecture<span>Clean architecture, couches et règle de dépendance</span></a></li>
+    <li><a href="#flux">Flux de données<span>Télémétrie, IA, alertes</span></a></li>
+    <li><a href="#donnees">Modèle de données<span>Bases SQLite, tables, rétention</span></a></li>
+    <li><a href="#api">API HTTP<span>Routes, contrats, codes d'erreur</span></a></li>
+    <li><a href="#temps-reel">Temps réel et vidéo<span>SSE, relais MJPEG</span></a></li>
+    <li><a href="#ia">Intégration du service IA<span>File ordonnée, statut, reconnaissance faciale</span></a></li>
+    <li><a href="#notifications">Notifications<span>Détection d'alertes, anti-spam, transport mail</span></a></li>
+    <li><a href="#securite">Sécurité<span>Authentification, limites, proxy, secrets</span></a></li>
+    <li><a href="#config">Configuration et déploiement<span>Variables, Docker, scripts</span></a></li>
+    <li><a href="#qualite">Tests et qualité<span>Stratégie et résultats</span></a></li>
+  </ol>
+</section>
+
+<h2 id="role" style="margin-top:0"><span class="num">1</span> Rôle dans la plateforme</h2>
+<p><code>iot-backend</code> est le <strong>seul point d'entrée du navigateur</strong>. Il reçoit la télémétrie du boîtier via le broker MQTT, la valide, l'enregistre dans SQLite et la diffuse en temps réel au dashboard. Il orchestre aussi l'analyse par le service IA et relaie la vidéo de la webcam. Le navigateur ne contacte jamais directement MQTT ni FastAPI : toutes les routes passent par une session authentifiée.</p>
+<figure class="diagram">
+<svg viewBox="0 0 760 236" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6575"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="40" width="130" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="75" y="66" font-weight="700" fill="#142033">ESP8266</text><text x="75" y="84" fill="#5b6575" font-size="9.5">Firmware</text>
+    <rect x="165" y="40" width="130" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="230" y="66" font-weight="700" fill="#142033">Passerelle USB</text><text x="230" y="84" fill="#5b6575" font-size="9.5">Python</text>
+    <rect x="320" y="40" width="110" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="375" y="66" font-weight="700" fill="#142033">Mosquitto</text><text x="375" y="84" fill="#5b6575" font-size="9.5">Broker MQTT</text>
+    <rect x="455" y="40" width="140" height="62" rx="8" fill="#2b62d9"/><text x="525" y="66" font-weight="700" fill="#fff">Backend Express</text><text x="525" y="84" fill="#dbe6ff" font-size="9.5">Ce document</text>
+    <rect x="620" y="40" width="130" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="685" y="66" font-weight="700" fill="#142033">Dashboard React</text><text x="685" y="84" fill="#5b6575" font-size="9.5">Navigateur</text>
+    <rect x="455" y="160" width="140" height="56" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="525" y="184" font-weight="700" fill="#142033">Service IA FastAPI</text><text x="525" y="201" fill="#5b6575" font-size="9.5">127.0.0.1:8001</text>
+    <rect x="290" y="160" width="140" height="56" rx="8" fill="#fff" stroke="#9fb7ee"/><text x="360" y="184" font-weight="700" fill="#1f4fae">SQLite</text><text x="360" y="201" fill="#5b6575" font-size="9.5">auth · telemetry · settings</text>
+    <rect x="620" y="160" width="130" height="56" rx="8" fill="#fff" stroke="#9fb7ee"/><text x="685" y="184" font-weight="700" fill="#1f4fae">Serveur SMTP</text><text x="685" y="201" fill="#5b6575" font-size="9.5">Notifications</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.6" fill="none" marker-end="url(#b1)">
+    <line x1="140" y1="71" x2="163" y2="71"/><line x1="295" y1="71" x2="318" y2="71"/><line x1="430" y1="71" x2="453" y2="71"/><line x1="595" y1="71" x2="618" y2="71"/>
+    <line x1="525" y1="104" x2="525" y2="158"/><polyline points="470,104 470,130 400,130 400,158"/><polyline points="580,104 580,130 685,130 685,158"/>
+  </g>
+  <g font-size="9" fill="#5b6575" text-anchor="middle"><text x="152" y="32">USB</text><text x="307" y="32">MQTT</text><text x="442" y="32">MQTT</text><text x="607" y="32">REST · SSE · MJPEG</text><text x="545" y="148" text-anchor="start">HTTP + jeton</text></g>
+</svg>
+<figcaption><b>Figure 1.</b> Position du backend dans Sentinel-X et ses dépendances externes.</figcaption>
+</figure>
+
+<h2 id="architecture"><span class="num">2</span> Architecture</h2>
+<p>Le code suit la <strong>clean architecture</strong>. Les règles métier ne dépendent d'aucun framework, et les dépendances pointent toujours vers le centre : <code>domain</code> n'importe rien, <code>application</code> n'importe que <code>domain</code>, et <code>presentation</code> n'importe jamais <code>infrastructure</code>. Seul <code>main.ts</code> connaît les implémentations concrètes.</p>
+<figure class="diagram">
+<svg viewBox="0 0 760 214" xmlns="http://www.w3.org/2000/svg">
+  <g font-size="11">
+    <rect x="10" y="10" width="740" height="194" rx="10" fill="#f4f6fa" stroke="#c9d1de"/>
+    <text x="24" y="30" font-weight="700" fill="#142033">Composition — main.ts</text>
+    <rect x="24" y="42" width="230" height="150" rx="8" fill="#fff" stroke="#c9d1de"/>
+    <text x="38" y="62" font-weight="700" fill="#142033">Infrastructure</text>
+    <text x="38" y="80" font-size="9.5" fill="#5b6575">SQLite (lectures, IA, paramètres)</text>
+    <text x="38" y="95" font-size="9.5" fill="#5b6575">Passerelle MQTT + parsing</text>
+    <text x="38" y="110" font-size="9.5" fill="#5b6575">Client HTTP IA, flux caméra</text>
+    <text x="38" y="125" font-size="9.5" fill="#5b6575">Better Auth, mailers SMTP/outbox</text>
+    <text x="38" y="140" font-size="9.5" fill="#5b6575">Bus d'événements, configuration</text>
+    <rect x="506" y="42" width="230" height="150" rx="8" fill="#fff" stroke="#c9d1de"/>
+    <text x="520" y="62" font-weight="700" fill="#142033">Présentation HTTP</text>
+    <text x="520" y="80" font-size="9.5" fill="#5b6575">Application Express</text>
+    <text x="520" y="95" font-size="9.5" fill="#5b6575">Routes : appareil, lectures, IA,</text>
+    <text x="520" y="110" font-size="9.5" fill="#5b6575">vision, temps réel, paramètres</text>
+    <text x="520" y="125" font-size="9.5" fill="#5b6575">Middlewares : session, IP client,</text>
+    <text x="520" y="140" font-size="9.5" fill="#5b6575">gestion centralisée des erreurs</text>
+    <rect x="270" y="42" width="220" height="150" rx="8" fill="#e8efff" stroke="#9fb7ee"/>
+    <text x="284" y="62" font-weight="700" fill="#1f4fae">Application</text>
+    <text x="284" y="80" font-size="9.5" fill="#2c3b57">Cas d'usage, ports (interfaces)</text>
+    <text x="284" y="95" font-size="9.5" fill="#2c3b57">DeviceState, AiCoordinator,</text>
+    <text x="284" y="110" font-size="9.5" fill="#2c3b57">AlertDetector, erreurs métier</text>
+    <rect x="290" y="124" width="180" height="56" rx="8" fill="#2b62d9"/>
+    <text x="304" y="144" font-weight="700" fill="#fff">Domaine</text>
+    <text x="304" y="161" font-size="9.5" fill="#dbe6ff">Télémétrie, vision, IA, visages,</text>
+    <text x="304" y="174" font-size="9.5" fill="#dbe6ff">notifications : types et règles</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.6" fill="none"><line x1="254" y1="117" x2="268" y2="117"/><line x1="506" y1="117" x2="492" y2="117"/></g>
+  <g fill="#5b6575"><path d="M268,113 L268,121 L276,117 z"/><path d="M492,113 L492,121 L484,117 z"/></g>
+</svg>
+<figcaption><b>Figure 2.</b> Couches du backend : l'infrastructure et la présentation dépendent de l'application, qui dépend du domaine.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Couche</th><th>Contenu principal (<code>src/</code>)</th></tr></thead>
+  <tbody>
+    <tr><td>Domaine</td><td class="wrap"><code>domain/telemetry.ts</code> (mesures, indicateurs du boîtier, règle d'horodatage), <code>vision.ts</code>, <code>ai.ts</code>, <code>faces.ts</code>, <code>notification.ts</code> (types d'alertes, délais, validation d'e-mail)</td></tr>
+    <tr><td>Application</td><td class="wrap"><code>ports.ts</code> (ReadingRepository, DeviceGateway, AiGateway, AiPredictionRepository, LiveEvents, CameraFeed, SessionVerifier, NotificationSettingsRepository, Mailer, Clock) ; cas d'usage <code>use-cases/</code> ; <code>device-state.ts</code>, <code>ai-coordinator.ts</code>, <code>alert-detector.ts</code>, <code>face-enrollment.ts</code>, <code>errors.ts</code></td></tr>
+    <tr><td>Infrastructure</td><td class="wrap"><code>persistence/</code> (SQLite), <code>messaging/</code> (client MQTT, parsing), <code>ai/</code> (client HTTP FastAPI, contrat JSON), <code>auth/</code> (Better Auth), <code>camera/</code>, <code>mail/</code>, <code>events/</code>, <code>config.ts</code></td></tr>
+    <tr><td>Présentation</td><td class="wrap"><code>presentation/http/app.ts</code>, <code>routes/</code>, <code>middleware/</code></td></tr>
+    <tr><td>Outils</td><td class="wrap"><code>main.ts</code> (composition), <code>cli/create-user.ts</code>, <code>tools/simulator.ts</code> (simulateur MQTT et caméra factice)</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Cas d'usage</th><th>Responsabilité</th></tr></thead>
+  <tbody>
+    <tr><td><code>RecordTelemetry</code></td><td>Horodater, enregistrer, mettre à jour l'état courant, publier l'événement <code>reading</code></td></tr>
+    <tr><td><code>RecordDetection</code></td><td>Mémoriser une détection vision externe et publier <code>vision</code></td></tr>
+    <tr><td><code>GetDeviceStatus</code> / <code>GetReadingHistory</code> / <code>GetRecentDetections</code></td><td>Lectures pour l'API (historique borné à 500 lignes)</td></tr>
+    <tr><td><code>SendDeviceCommand</code></td><td>Valider <code>ON</code>/<code>OFF</code> et publier sur le topic de commande</td></tr>
+    <tr><td><code>CheckDeviceHeartbeat</code> / <code>NotifyAlert</code></td><td>Détecter le silence du boîtier et envoyer les alertes par e-mail</td></tr>
+    <tr><td><code>Get/UpdateNotificationSettings</code>, <code>SendTestNotification</code></td><td>Paramètres d'alerte et e-mail de test</td></tr>
+    <tr><td><code>PruneReadingHistory</code></td><td>Purge horaire au-delà de la rétention</td></tr>
+  </tbody>
+</table>
+
+<h2 id="flux"><span class="num">3</span> Flux de données</h2>
+<h3>3.1 Ingestion de la télémétrie</h3>
+<ol class="steps">
+  <li><code>MqttDeviceGateway</code> reçoit un message sur <code>esp8266/donnees</code>. <code>parseTelemetryMessage</code> le valide : nombres finis, <code>presence</code> booléen ou 0/1, <code>ts</code> en secondes Unix ou <code>timestamp</code> ISO, indicateurs booléens du boîtier, <code>source</code> <code>live</code> ou <code>simulation</code>. Un message invalide est rejeté en entier.</li>
+  <li><code>RecordTelemetry</code> détermine l'heure d'enregistrement avec <code>resolveRecordedAt</code> : l'heure de mesure est conservée si elle est plausible (au plus 60 s dans le futur, pas plus vieille que la rétention), sinon l'heure de réception est utilisée.</li>
+  <li>La mesure est écrite dans la table <code>readings</code> avec sa source et ses indicateurs. <code>DeviceState</code> ne prend en compte que les mesures <strong>physiques</strong> les plus récentes : une mesure rejouée ou simulée ne remplace jamais l'état courant.</li>
+  <li>L'événement <code>reading</code> est publié sur le bus interne. Le flux SSE le diffuse, l'<code>AiCoordinator</code> le place dans sa file et l'<code>AlertDetector</code> l'évalue.</li>
+</ol>
+<h3>3.2 Analyse IA</h3>
+<p>L'<code>AiCoordinator</code> envoie les mesures récentes (moins de 30 s, au plus 5 s dans le futur, ordre chronologique respecté par source) à <code>POST /analyze</code>, <strong>une à la fois</strong> pour préserver l'ordre des features temporelles. La file contient au plus 32 mesures ; en surcharge, la plus ancienne est abandonnée et <code>dropped_samples</code> est incrémenté. Les indicateurs de préchauffage et de validité excluent les canaux non fiables du lot envoyé. Le résultat validé est enregistré dans <code>ai_predictions</code>, puis publié en SSE (<code>ai</code>). Un sondage de <code>/status</code> toutes les 2 s alimente <code>ai-status</code>, même sans nouvelle mesure.</p>
+<div class="note"><p>MQTT n'attend jamais l'IA. Si FastAPI est arrêté ou lent, le statut passe hors ligne, les mesures continuent d'être enregistrées et le dernier résultat reste consultable. Aucun résultat NORMAL ou SAFE n'est inventé.</p></div>
+<h3>3.3 Alertes</h3>
+<p>L'<code>AlertDetector</code> transforme les événements en alertes uniquement sur <strong>changement d'état</strong> :</p>
+<ul>
+  <li>intrusion : passage du PIR à « présence », pour une mesure physique récente (moins de 60 s) ;</li>
+  <li>visage inconnu : détection contenant un visage sans nom ;</li>
+  <li>boîtier hors ligne : aucune mesure physique depuis 30 s (vérification toutes les 10 s), une seule alerte par silence.</li>
+</ul>
+<p>Les mesures et détections simulées ne déclenchent jamais de notification réelle.</p>
+
+<h2 id="donnees"><span class="num">4</span> Modèle de données</h2>
+<p>Le stockage utilise le module natif <code>node:sqlite</code> (aucune dépendance native à compiler), en mode WAL. Trois fichiers, configurables et ignorés par Git :</p>
+<table>
+  <thead><tr><th>Fichier (défaut)</th><th>Tables</th><th>Contenu</th></tr></thead>
+  <tbody>
+    <tr><td><code>data/auth.db</code></td><td><code>user</code>, <code>session</code>, <code>account</code>, <code>verification</code></td><td>Comptes et sessions Better Auth (migrations automatiques au démarrage, mots de passe hachés en scrypt)</td></tr>
+    <tr><td rowspan="2"><code>data/telemetry.db</code></td><td><code>readings</code></td><td><code>id</code>, <code>recorded_at</code> (ms), <code>temperature</code>, <code>humidity</code>, <code>gas</code>, <code>presence</code>, <code>source</code> (<code>live</code>/<code>simulation</code>, <code>NULL</code> pour l'historique antérieur à la migration), <code>device_flags</code> (JSON) ; index sur <code>recorded_at</code></td></tr>
+    <tr><td><code>ai_predictions</code></td><td><code>id</code>, <code>event_key</code> unique (déduplication), <code>recorded_at</code>, <code>payload</code> (prédiction JSON complète)</td></tr>
+    <tr><td><code>data/settings.db</code></td><td><code>notification_settings</code></td><td>Ligne unique : adresse e-mail, activation, types d'alertes (JSON)</td></tr>
+  </tbody>
+</table>
+<p>Les lectures et les prédictions IA partagent la même rétention (<code>READINGS_RETENTION_DAYS</code>, 7 jours par défaut), appliquée au démarrage puis toutes les heures. La provenance <code>source</code> permet d'exporter uniquement les mesures réelles pour l'entraînement du modèle IA.</p>
+
+<h2 id="api"><span class="num">5</span> API HTTP</h2>
+<p>Better Auth est monté sur <code>/api/auth/*</code>. <code>GET /api/health</code> est public. Toutes les autres routes exigent une session (cookie) et renvoient <code>401</code> sinon.</p>
+<table>
+  <thead><tr><th>Méthode et route</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/status</code></td><td>État MQTT, dernière mesure physique et son heure</td></tr>
+    <tr><td><code>GET /api/readings?limit=N</code></td><td>Historique, plus récent d'abord (1 ≤ N ≤ 500)</td></tr>
+    <tr><td><code>GET /api/vision</code></td><td>Détections vision externes récentes</td></tr>
+    <tr><td><code>GET /api/stream</code></td><td>Flux SSE : <code>reading</code>, <code>vision</code>, <code>ai</code>, <code>ai-status</code></td></tr>
+    <tr><td><code>GET /api/camera/stream</code></td><td>Relais MJPEG authentifié (alias <code>/api/ai/vision/stream</code>)</td></tr>
+    <tr><td><code>POST /api/action</code></td><td><code>{"ordre":"ON"|"OFF"}</code>, publié sur <code>esp8266/led</code> — <code>202</code></td></tr>
+    <tr><td><code>GET /api/ai/status</code>, <code>/latest</code>, <code>/history?limit=N</code></td><td>Disponibilité, dernière prédiction (priorité au réel pendant 30 s), historique</td></tr>
+    <tr><td><code>POST /api/ai/vision/start</code> / <code>stop</code>, <code>GET /api/ai/vision/status</code></td><td>Pilotage de la webcam du serveur</td></tr>
+    <tr><td><code>GET /api/ai/vision/faces/status</code>, <code>/latest</code>, <code>/history</code></td><td>Catalogue facial, reconnaissances courantes, 20 derniers événements</td></tr>
+    <tr><td><code>POST /api/ai/vision/faces/reload</code></td><td>Rechargement atomique des photos de référence</td></tr>
+    <tr><td><code>POST /api/ai/vision/faces/enroll</code></td><td>Ajout de 1 à 5 photos pour une identité (JSON base64, 21 Mio max)</td></tr>
+    <tr><td><code>GET</code> / <code>PUT /api/settings/notifications</code></td><td>Lecture et mise à jour des paramètres d'alerte</td></tr>
+    <tr><td><code>POST /api/settings/notifications/test</code></td><td>E-mail de test (au plus toutes les 30 s) — <code>202</code></td></tr>
+  </tbody>
+</table>
+<h4>Exemple : télémétrie publiée par la passerelle</h4>
+<pre><code>{ "source": "live", "device": "sentinel-x-01", "ts": 1791370000.5,
+  "temperature": 24.4, "humidity": 61.1, "gas": 40, "presence": true,
+  "climateValid": true, "gasReady": true, "pirReady": true, "gasAlert": false,
+  "alarmActive": true, "ledRed": true, "ledOrange": false, "ledGreen": false }</code></pre>
+<h4>Codes d'erreur</h4>
+<p>Un gestionnaire central traduit les erreurs applicatives. Les réponses ont toujours la forme <code>{ "message": "..." }</code>.</p>
+<table>
+  <thead><tr><th>Code</th><th>Cause</th></tr></thead>
+  <tbody>
+    <tr><td><code>400</code></td><td>Requête invalide (validation métier, JSON mal formé)</td></tr>
+    <tr><td><code>401</code> / <code>403</code></td><td>Session absente ou expirée / origine non autorisée par Better Auth</td></tr>
+    <tr><td><code>413</code> / <code>422</code></td><td>Corps trop volumineux / photos d'enrôlement inexploitables</td></tr>
+    <tr><td><code>429</code></td><td>Trop de tentatives (connexion, e-mail de test)</td></tr>
+    <tr><td><code>502</code></td><td>Commande ou e-mail non remis par le broker ou le serveur SMTP ; flux caméra injoignable</td></tr>
+    <tr><td><code>503</code></td><td>Broker déconnecté, transport mail ou service IA/caméra indisponible</td></tr>
+  </tbody>
+</table>
+
+<h2 id="temps-reel"><span class="num">6</span> Temps réel et vidéo</h2>
+<p><code>GET /api/stream</code> ouvre un flux <strong>Server-Sent Events</strong> (<code>text/event-stream</code>). Chaque événement transporte l'objet JSON concerné : une lecture enregistrée (avec son <code>id</code>), une détection, une prédiction IA persistée ou le statut IA. Un commentaire de maintien est envoyé toutes les 15 s, et le flux est fermé quand la session expire : le client revient alors à l'écran de connexion. L'en-tête <code>X-Accel-Buffering: no</code> désactive la mise en tampon de nginx.</p>
+<p>La vidéo ne passe jamais par SSE. <code>/api/camera/stream</code> relaie en flux continu le MJPEG du service IA, ou d'un service externe défini par <code>VISION_STREAM_URL</code>. Le relais préserve le <code>Content-Type</code>, ajoute le jeton du service IA côté serveur et annule la requête amont quand le navigateur se déconnecte.</p>
+
+<h2 id="ia"><span class="num">7</span> Intégration du service IA</h2>
+<ul>
+  <li><strong>Contrat validé</strong> : <code>infrastructure/ai/ai-contract.ts</code> vérifie chaque réponse JSON de FastAPI avant persistance ou diffusion.</li>
+  <li><strong>Authentification de service</strong> : si <code>AI_SERVICE_TOKEN</code> est défini, il est envoyé en <code>Authorization: Bearer</code>. Il n'est jamais transmis au navigateur.</li>
+  <li><strong>Délais</strong> : 5 s par appel (<code>AI_TIMEOUT_MS</code>) ; 60 s pour le rechargement et l'enrôlement des visages.</li>
+  <li><strong>Source de la caméra</strong> : <code>VISION_STREAM_URL</code> explicite prioritaire ; absent, le backend relaie <code>AI_SERVICE_URL/stream.mjpg</code> ; vide, la vidéo est désactivée.</li>
+  <li><strong>Séparation réel / simulation</strong> : les prédictions conservent leur source ; une analyse simulée ne remplace pas l'état canonique de la webcam ni une analyse réelle récente.</li>
+  <li><strong>Enrôlement facial</strong> : seule cette route accepte un corps JSON de 21 Mio, <strong>après</strong> vérification de la session. Limites : 5 photos, 5 Mio par photo et 15 Mio au total une fois décodées. Les noms sont normalisés et filtrés (séparateurs de chemin, noms réservés).</li>
+</ul>
+
+<h2 id="notifications"><span class="num">8</span> Notifications</h2>
+<table>
+  <thead><tr><th>Règle</th><th>Valeur</th></tr></thead>
+  <tbody>
+    <tr><td>Types d'alertes</td><td><code>intrusion</code>, <code>unknown-face</code>, <code>device-offline</code> (activables individuellement)</td></tr>
+    <tr><td>Anti-spam</td><td>un e-mail par type toutes les 5 minutes au plus</td></tr>
+    <tr><td>Fraîcheur</td><td>un événement de plus de 60 s ne déclenche pas d'alerte</td></tr>
+    <tr><td>E-mail de test</td><td>au plus toutes les 30 s</td></tr>
+    <tr><td>Validation</td><td>adresse ≤ 254 caractères, sans espace ni retour ligne (anti-injection d'en-tête) ; adresse obligatoire pour activer</td></tr>
+  </tbody>
+</table>
+<p>Le port <code>Mailer</code> a trois implémentations, choisies au démarrage : <code>SmtpMailer</code> si <code>SMTP_HOST</code> est défini (STARTTLS exigé hors TLS implicite), <code>OutboxMailer</code> si <code>MAIL_OUTBOX_DIR</code> est défini (fichiers <code>.eml</code>, mode test), sinon <code>UnconfiguredMailer</code> (aucun envoi, signalé dans l'interface).</p>
+
+<h2 id="securite"><span class="num">9</span> Sécurité</h2>
+<ul>
+  <li><strong>Authentification</strong> : Better Auth, e-mail et mot de passe (12 caractères minimum), cookie de session <code>HttpOnly</code>, sessions de 8 h renouvelées toutes les heures. L'inscription publique est désactivée ; les comptes se créent en ligne de commande.</li>
+  <li><strong>Limitation de débit</strong> : 100 requêtes d'authentification par minute et par IP, 5 tentatives de connexion par minute. L'IP est lue dans <code>X-Forwarded-For</code>, que le backend réécrit avec l'IP résolue selon <code>TRUST_PROXY</code> : un client ne peut pas la falsifier pour contourner le blocage.</li>
+  <li><strong>Origines</strong> : CORS et origines de confiance limitées à <code>FRONTEND_ORIGINS</code> ; une connexion depuis une autre origine est refusée (<code>403</code>).</li>
+  <li><strong>Taille des requêtes</strong> : 16 Kio par défaut ; 21 Mio uniquement pour l'enrôlement facial authentifié.</li>
+  <li><strong>Secrets</strong> : <code>BETTER_AUTH_SECRET</code> obligatoire (≥ 32 caractères, refus de démarrer sinon) ; aucun secret dans le dépôt (<code>.env</code> ignorés, contrôle <code>scripts/check-repository.py</code>).</li>
+  <li><strong>Traçabilité</strong> : chaque commande LED et chaque modification des paramètres sont journalisées avec l'e-mail de l'opérateur.</li>
+  <li><strong>Conteneur</strong> : utilisateur non-root, système de fichiers en lecture seule, capacités Linux retirées, <code>no-new-privileges</code>, API non publiée (accessible seulement via nginx).</li>
+</ul>
+
+<h2 id="config"><span class="num">10</span> Configuration et déploiement</h2>
+<table>
+  <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>PORT</code></td><td>3001</td><td>Port HTTP</td></tr>
+    <tr><td><code>MQTT_URL</code></td><td>mqtt://127.0.0.1:1883</td><td>Broker</td></tr>
+    <tr><td><code>MQTT_TELEMETRY_TOPIC</code> / <code>_COMMAND_TOPIC</code> / <code>_VISION_TOPIC</code></td><td>esp8266/donnees · esp8266/led · sentinel/vision</td><td>Topics</td></tr>
+    <tr><td><code>AI_SERVICE_URL</code> / <code>AI_SERVICE_TOKEN</code></td><td>http://127.0.0.1:8001 / vide</td><td>Service IA (vide : IA désactivée)</td></tr>
+    <tr><td><code>AI_TIMEOUT_MS</code> / <code>AI_POLL_MS</code></td><td>5000 / 2000</td><td>Délai d'appel, période de sondage</td></tr>
+    <tr><td><code>VISION_STREAM_URL</code></td><td>absent</td><td>Flux caméra explicite ; vide = désactivé</td></tr>
+    <tr><td><code>TELEMETRY_DATABASE_PATH</code> · <code>AUTH_DATABASE_PATH</code> · <code>SETTINGS_DATABASE_PATH</code></td><td>data/*.db</td><td>Bases SQLite</td></tr>
+    <tr><td><code>READINGS_RETENTION_DAYS</code></td><td>7</td><td>Rétention des lectures et prédictions</td></tr>
+    <tr><td><code>BETTER_AUTH_SECRET</code> / <code>BETTER_AUTH_URL</code></td><td>obligatoire / 1<sup>re</sup> origine</td><td>Secret de session, URL publique</td></tr>
+    <tr><td><code>FRONTEND_ORIGINS</code></td><td>origines Vite locales</td><td>Origines autorisées (liste)</td></tr>
+    <tr><td><code>TRUST_PROXY</code></td><td>loopback</td><td>Proxys autorisés à transmettre l'IP client</td></tr>
+    <tr><td><code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_SECURE</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>MAIL_FROM</code></td><td>587, false</td><td>Envoi des notifications</td></tr>
+    <tr><td><code>MAIL_OUTBOX_DIR</code></td><td>vide</td><td>Mode test : e-mails écrits en <code>.eml</code></td></tr>
+  </tbody>
+</table>
+<h4>Scripts npm</h4>
+<pre><code>npm run dev          # tsx watch src/main.ts (rechargement automatique)
+npm run build        # compilation TypeScript vers dist/
+npm start            # node dist/main.js
+npm test             # tests (runner natif de Node via tsx)
+npm run typecheck    # vérification de types
+npm run user:create -- operateur@exemple.fr "Nom"
+npm run simulate     # simulateur MQTT + caméra factice (source: simulation)</code></pre>
+<p><strong>Docker</strong> : image multi-étapes <code>node:24-slim</code>, healthcheck sur <code>/api/health</code>. <code>docker-compose.yml</code> associe le backend au frontend nginx sur un réseau interne <code>172.30.10.0/24</code>, avec <code>TRUST_PROXY</code> limité à ce sous-réseau. Le volume <code>backend-data</code> conserve les bases. Le broker et le service IA (qui a besoin de la webcam) restent sur l'hôte.</p>
+
+<h2 id="qualite"><span class="num">11</span> Tests et qualité</h2>
+<p>Les tests s'exécutent avec le runner natif de Node (<code>node:test</code> via <code>tsx</code>), sans broker, sans base persistante ni service IA réel :</p>
+<ul>
+  <li><strong>domaine</strong> : horodatage plausible, commandes, règles de notification ;</li>
+  <li><strong>application</strong> : cas d'usage, état de l'appareil, coordinateur IA, détecteur d'alertes et enrôlement facial, avec des faux adaptateurs en mémoire ;</li>
+  <li><strong>infrastructure</strong> : parsing MQTT, dépôts SQLite en mémoire, client IA, contrats faciaux ;</li>
+  <li><strong>présentation</strong> : routes IA et enrôlement (authentification exigée avant traitement, limites de taille).</li>
+</ul>
+<table>
+  <thead><tr><th>Vérification (état du dépôt à la génération)</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td><code>npm test</code></td><td><span class="pill ok">84/84 réussis</span></td></tr>
+    <tr><td><code>npm run typecheck</code> et <code>npm run build</code></td><td><span class="pill ok">sans erreur</span></td></tr>
+  </tbody>
+</table>
+<p>Le job <em>backend</em> de la CI GitHub Actions rejoue ces trois étapes sur Node 24 à chaque push. Des scripts d'intégration complémentaires (<code>scripts/check-ai-integration.mjs</code>, <code>check-face-enrollment.mjs</code>, <code>check-camera-integration.mjs</code>) démarrent des processus réels isolés, avec bases et ports temporaires.</p>
+
+</body>
+</html>

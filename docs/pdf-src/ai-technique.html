@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Service IA · Documentation technique</title>
+<meta name="pdf-name" content="Sentinel-X_IA_Documentation-technique.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Documentation technique</div>
+  <h1 class="outline-title">Service d'intelligence artificielle locale</h1>
+  <div class="cover-title" aria-hidden="true">Service d'intelligence artificielle locale</div>
+  <p class="cover-subtitle">FastAPI : détection d'anomalies par Isolation Forest, vision YOLOv8 et ByteTrack, reconnaissance faciale YuNet et SFace, fusion de capteurs et moteur de risque.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Pile</dt><dd>Python 3.12, FastAPI, Uvicorn, scikit-learn, NumPy, OpenCV, Ultralytics YOLOv8, Pydantic</dd>
+    <dt>Public</dt><dd>Équipe IA et data, développeurs et jury technique</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#role">Rôle et intégration<span>Position du service, principes</span></a></li>
+    <li><a href="#modules">Organisation du code<span>Modules et responsabilités</span></a></li>
+    <li><a href="#anomalies">Détection d'anomalies<span>Features, entraînement, inférence, scores</span></a></li>
+    <li><a href="#vision">Vision par ordinateur<span>Capture, YOLOv8, ByteTrack, MJPEG</span></a></li>
+    <li><a href="#visages">Reconnaissance faciale<span>YuNet, SFace, catalogue, enrôlement</span></a></li>
+    <li><a href="#fusion">Fusion et moteur de risque<span>Règles, pondérations, niveaux</span></a></li>
+    <li><a href="#api">API<span>Routes et format de prédiction</span></a></li>
+    <li><a href="#config">Configuration<span>Variables d'environnement</span></a></li>
+    <li><a href="#securite">Sécurité, robustesse, performances<span>Jeton, pannes, ressources</span></a></li>
+    <li><a href="#qualite">Tests et limites<span>Couverture, résultats, précautions</span></a></li>
+  </ol>
+</section>
+
+<h2 id="role" style="margin-top:0"><span class="num">1</span> Rôle et intégration</h2>
+<p>Le service IA s'exécute localement sur le PC Serveur Local, par défaut sur <code>127.0.0.1:8001</code>. Il n'est jamais appelé par le navigateur : le backend lui transmet chaque mesure récente par HTTP, persiste les résultats dans SQLite et les diffuse au dashboard par SSE. La webcam est branchée sur le serveur ; le service l'analyse et produit un flux MJPEG annoté, relayé par le backend derrière la session.</p>
+<figure class="diagram">
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6575"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="20" width="150" height="56" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="85" y="44" font-weight="700" fill="#142033">Backend Express</text><text x="85" y="61" fill="#5b6575" font-size="9.5">POST /analyze, /status</text>
+    <rect x="10" y="170" width="150" height="56" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="85" y="194" font-weight="700" fill="#142033">Webcam USB</text><text x="85" y="211" fill="#5b6575" font-size="9.5">PC serveur, 640×480</text>
+    <rect x="215" y="20" width="160" height="56" rx="8" fill="#2b62d9"/><text x="295" y="44" font-weight="700" fill="#fff">Isolation Forest</text><text x="295" y="61" fill="#dbe6ff" font-size="9.5">13 features temporelles</text>
+    <rect x="215" y="140" width="160" height="50" rx="8" fill="#2b62d9"/><text x="295" y="162" font-weight="700" fill="#fff">YOLOv8n + ByteTrack</text><text x="295" y="178" fill="#dbe6ff" font-size="9.5">personnes, confirmation</text>
+    <rect x="215" y="200" width="160" height="44" rx="8" fill="#2b62d9"/><text x="295" y="219" font-weight="700" fill="#fff">YuNet + SFace</text><text x="295" y="234" fill="#dbe6ff" font-size="9.5">visages, identités</text>
+    <rect x="430" y="70" width="140" height="56" rx="8" fill="#2b62d9"/><text x="500" y="94" font-weight="700" fill="#fff">Sensor Fusion</text><text x="500" y="111" fill="#dbe6ff" font-size="9.5">fraîcheur, corrélation</text>
+    <rect x="610" y="70" width="140" height="56" rx="8" fill="#2b62d9"/><text x="680" y="94" font-weight="700" fill="#fff">Risk Engine</text><text x="680" y="111" fill="#dbe6ff" font-size="9.5">score 0–100, catégorie</text>
+    <rect x="430" y="190" width="140" height="50" rx="8" fill="#fff" stroke="#9fb7ee"/><text x="500" y="212" font-weight="700" fill="#1f4fae">MJPEG annoté</text><text x="500" y="228" fill="#5b6575" font-size="9.5">/stream.mjpg</text>
+    <rect x="610" y="190" width="140" height="50" rx="8" fill="#fff" stroke="#9fb7ee"/><text x="680" y="212" font-weight="700" fill="#1f4fae">Statut facial</text><text x="680" y="228" fill="#5b6575" font-size="9.5">vision.faces, mémoire</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.5" fill="none" marker-end="url(#d1)">
+    <line x1="160" y1="48" x2="213" y2="48"/><polyline points="160,198 190,198 190,165 213,165"/><polyline points="160,206 190,206 190,222 213,222"/>
+    <polyline points="375,48 400,48 400,90 428,90"/><polyline points="375,165 400,165 400,106 428,106"/><line x1="570" y1="98" x2="608" y2="98"/>
+    <polyline points="375,175 410,175 410,215 428,215"/><polyline points="375,226 395,226 395,244 600,244 600,222 608,222"/>
+  </g>
+</svg>
+<figcaption><b>Figure 1.</b> Chaîne d'analyse du service IA. Le backend reçoit le résultat de la fusion et du moteur de risque.</figcaption>
+</figure>
+<div class="note"><p>Principes : aucune prédiction inventée (les inconnues valent <code>null</code>), aucun modèle de production fourni ni entraîné automatiquement, séparation stricte des données réelles et simulées, et une panne de l'IA n'interrompt jamais l'ingestion des capteurs.</p></div>
+
+<h2 id="modules"><span class="num">2</span> Organisation du code</h2>
+<table>
+  <thead><tr><th>Module (<code>ai/app/</code>)</th><th>Responsabilité</th></tr></thead>
+  <tbody>
+    <tr><td><code>main.py</code></td><td>Application FastAPI, routes, authentification par jeton, démarrage Uvicorn avec réservation du port</td></tr>
+    <tr><td><code>config.py</code></td><td>Lecture et validation des variables d'environnement ; chemins relatifs résolus depuis <code>ai/</code></td></tr>
+    <tr><td><code>service.py</code></td><td>Orchestration : analyse d'une mesure, état courant, rechargement du modèle</td></tr>
+    <tr><td><code>schemas/</code></td><td>Modèles Pydantic : mesures, prédictions, vision, visages</td></tr>
+    <tr><td><code>anomaly/</code></td><td><code>preprocessing.py</code> (features), <code>trainer.py</code> (entraînement CLI), <code>model_manager.py</code> (artefact), <code>detector.py</code> (inférence)</td></tr>
+    <tr><td><code>vision/</code></td><td><code>camera.py</code> (capture et workers), <code>person_detector.py</code> (YOLO), <code>tracker.py</code> (ByteTrack), <code>face_recognition.py</code>, <code>face_enrollment.py</code>, <code>setup_faces.py</code> (téléchargement vérifié des modèles)</td></tr>
+    <tr><td><code>fusion/</code></td><td><code>sensor_fusion.py</code> (preuves, fraîcheur) et <code>risk_engine.py</code> (score et catégorie)</td></tr>
+    <tr><td><code>integrations/backend_client.py</code></td><td>Export CSV des mesures réelles depuis la base SQLite du backend (lecture seule)</td></tr>
+    <tr><td><code>simulator.py</code></td><td>Données synthétiques d'entraînement et démonstration de dérive (commandes explicites)</td></tr>
+    <tr><td><code>utils/</code></td><td>Journalisation, santé, détection d'une instance déjà démarrée</td></tr>
+  </tbody>
+</table>
+
+<h2 id="anomalies"><span class="num">3</span> Détection d'anomalies</h2>
+<h3>3.1 Features</h3>
+<p>Le même extracteur (<code>FeatureExtractor</code>) sert à l'entraînement et à l'inférence. Il produit 13 features à partir d'une fenêtre glissante de 12 mesures (<code>ANOMALY_WINDOW</code>) :</p>
+<table>
+  <thead><tr><th>Famille</th><th>Features</th></tr></thead>
+  <tbody>
+    <tr><td>Valeurs brutes</td><td><code>temperature</code>, <code>humidity</code>, <code>gas</code>, <code>presence</code></td></tr>
+    <tr><td>Variations</td><td><code>temp_delta</code>, <code>gas_delta</code>, <code>temp_rate</code>, <code>gas_rate</code></td></tr>
+    <tr><td>Statistiques glissantes</td><td><code>temp_mean</code>, <code>temp_std</code>, <code>gas_mean</code>, <code>gas_std</code></td></tr>
+    <tr><td>Interaction</td><td><code>temp_gas_product</code></td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Les champs manquants sont imputés avec les <strong>médianes apprises</strong>, signalés dans <code>missing_fields</code>, et la confiance est réduite. L'imputation ne fabrique aucune hausse artificielle.</li>
+  <li>Les séquences sont remises à zéro après une coupure ou un changement de source. Les mesures réelles et simulées utilisent des fenêtres distinctes.</li>
+  <li>Les canaux hors limites (−40…80 °C, 0…100 %, gaz 0…1023) sont ignorés individuellement, avec une raison explicite ; les autres restent analysables.</li>
+</ul>
+<h3>3.2 Entraînement</h3>
+<pre><code># Export des mesures réelles (source = live) depuis le backend, en lecture seule
+python -m app.integrations.backend_client --database ../iot-backend/data/telemetry.db --output data/sensor_data.csv
+# Après sélection des périodes normales :
+python -m app.anomaly.trainer --csv data/normal_validated.csv --output models/isolation_forest.joblib</code></pre>
+<ul>
+  <li>Format CSV : <code>timestamp,temperature,humidity,gas,presence</code>. Les lignes sont triées chronologiquement ; sans horodatage, une cadence de 2 s est supposée.</li>
+  <li>Au moins <strong>128 valeurs observées par capteur</strong> sont exigées ; plusieurs milliers de mesures représentatives sont recommandées.</li>
+  <li>Modèle : <code>IsolationForest(n_estimators=200, contamination=0.03, random_state=42)</code>.</li>
+  <li>L'artefact joblib contient le modèle, les médianes, la liste des features, la version de format et la version de scikit-learn. Il est écrit de façon atomique ; un artefact incompatible est refusé au chargement, ce qui impose un réentraînement.</li>
+  <li>L'export exclut les mesures simulées et, par défaut, l'historique sans provenance connue (<code>--include-legacy</code> pour l'inclure en connaissance de cause), ainsi que les canaux marqués invalides ou en préchauffage par le firmware.</li>
+</ul>
+<h3>3.3 Résultat</h3>
+<table>
+  <thead><tr><th>Champ</th><th>Signification</th></tr></thead>
+  <tbody>
+    <tr><td><code>status</code></td><td><code>ready</code>, ou état explicite (modèle absent : <code>untrained</code>)</td></tr>
+    <tr><td><code>is_anomaly</code></td><td>Décision de la frontière apprise par l'Isolation Forest</td></tr>
+    <tr><td><code>anomaly_score</code></td><td>Distance à la frontière normalisée dans [0, 1] — <strong>pas une probabilité</strong></td></tr>
+    <tr><td><code>confidence</code></td><td>Marge de décision et disponibilité des données</td></tr>
+    <tr><td><code>reason</code>, <code>features</code></td><td>Principaux écarts des features (explication descriptive, non causale)</td></tr>
+  </tbody>
+</table>
+
+<h2 id="vision"><span class="num">4</span> Vision par ordinateur</h2>
+<ul>
+  <li><strong>Capture</strong> : index configurable (0 par défaut, −1 pour balayer), DirectShow en priorité sous Windows puis backend OpenCV par défaut. Images 640×480, au plus 15 i/s. L'état passe à <code>running</code> uniquement après la première image JPEG disponible.</li>
+  <li><strong>Workers séparés</strong> : capture, YOLO et reconnaissance faciale tournent dans des threads distincts. Un modèle absent, lent ou en erreur laisse la vidéo brute disponible (<code>detection_status</code> et <code>detection_error</code> explicites).</li>
+  <li><strong>Détection</strong> : YOLOv8n, classe personne uniquement, seuil de confiance 0,55, une image sur trois (<code>VISION_FRAME_STRIDE</code>).</li>
+  <li><strong>Confirmation</strong> : une personne est confirmée après 3 analyses consécutives positives. ByteTrack attribue des identifiants de suivi lorsqu'il est disponible ; un échec du tracker conserve la détection.</li>
+  <li><strong>Diffusion</strong> : les rectangles sont dessinés côté serveur ; un seul JPEG récent est partagé entre tous les spectateurs (une seule inférence quel que soit leur nombre). Aucune image n'est écrite sur disque.</li>
+  <li><strong>Cycle de vie</strong> : <code>start()</code> et <code>stop()</code> sont idempotents. L'arrêt libère la webcam, et une ancienne session ne peut plus publier de résultat.</li>
+</ul>
+
+<h2 id="visages"><span class="num">5</span> Reconnaissance faciale</h2>
+<p>Module indépendant : YuNet détecte les visages sur l'image complète, puis SFace calcule des embeddings, comparés par similarité cosinus au catalogue <code>known_faces/Nom/*.jpg</code> chargé en mémoire.</p>
+<table>
+  <thead><tr><th>Paramètre</th><th>Valeur par défaut</th></tr></thead>
+  <tbody>
+    <tr><td>Seuil d'identité (similarité)</td><td>0,55 — meilleur score parmi les photos d'une identité</td></tr>
+    <tr><td>Cadence</td><td>une image sur 3, 2 analyses par seconde au plus</td></tr>
+    <tr><td>Taille minimale d'un visage</td><td>40 pixels</td></tr>
+    <tr><td>Historique</td><td>20 événements en mémoire, anti-répétition de 5 s par identité ou suivi</td></tr>
+    <tr><td>Association au suivi</td><td>identifiant ByteTrack si le visage est contenu dans une boîte de personne de moins d'une seconde</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>Modèles</strong> : <code>face_detection_yunet_2023mar.onnx</code> et <code>face_recognition_sface_2021dec.onnx</code>, depuis OpenCV Zoo. <code>python -m app.vision.setup_faces</code> les télécharge une fois et vérifie leur empreinte SHA-256. Aucun téléchargement n'a lieu au démarrage.</li>
+  <li><strong>Enrôlement</strong> : 1 à 5 photos (JPEG/PNG/WebP, 5 Mio chacune, 15 Mio au total, 4 096 px et 16 Mpx au plus). Le contenu réel est vérifié, l'orientation EXIF corrigée et les métadonnées supprimées (dont la localisation). Les photos sont réduites à 1 600 px et enregistrées en JPEG nommés par UUID. Une photo sans visage, avec plusieurs visages ou trop petite est refusée avec un motif. En cas d'échec, les fichiers de l'envoi sont retirés.</li>
+  <li><strong>Rechargement</strong> : remplacement atomique du catalogue ; en cas d'échec global, le dernier catalogue valide est conservé.</li>
+  <li>Les noms et embeddings ne participent pas au moteur de risque et ne sont pas persistés dans les prédictions SQLite.</li>
+</ul>
+
+<h2 id="fusion"><span class="num">6</span> Fusion et moteur de risque</h2>
+<p>La fusion combine trois preuves, sous conditions de fraîcheur : capteurs de moins de 30 s, vision de moins de 5 s, tolérance de 5 s dans le futur. Les mesures simulées ne sont jamais corrélées à la webcam réelle.</p>
+<table>
+  <thead><tr><th>Preuve d'intrusion</th><th>Score d'intrusion</th><th>Confiance</th></tr></thead>
+  <tbody>
+    <tr><td>PIR actif et personne confirmée par la vision</td><td>80 + 15 × confiance vision</td><td>0,5 + 0,5 × confiance vision</td></tr>
+    <tr><td>Personne confirmée par la vision seule</td><td>55 + 20 × confiance vision</td><td>0,85 × confiance vision</td></tr>
+    <tr><td>PIR seul</td><td>35</td><td>0,35</td></tr>
+  </tbody>
+</table>
+<p><strong>Score environnemental</strong> : uniquement si l'Isolation Forest conclut à une anomalie. Il vaut 45 + 40 × <code>anomaly_score</code>, plus 10 si la température et le gaz augmentent ensemble (corrélation détectée par les features temporelles).</p>
+<p><strong>Risque final</strong> : le maximum des deux scores. Si intrusion et anomalie environnementale coexistent, la catégorie est <code>MULTI_THREAT</code> et le score est majoré de 12 (plafonné à 100). Sinon, la catégorie est <code>INTRUSION</code>, <code>ENVIRONMENT</code> (anomalie corrélée), <code>SENSOR_ANOMALY</code> ou <code>SAFE</code>.</p>
+<table>
+  <thead><tr><th>Score</th><th>0–24</th><th>25–49</th><th>50–74</th><th>75–89</th><th>90–100</th></tr></thead>
+  <tbody><tr><td>Niveau</td><td><span class="pill ok">SAFE</span></td><td><span class="pill info">LOW</span></td><td><span class="pill warn">MEDIUM</span></td><td><span class="pill warn">HIGH</span></td><td><span class="pill danger">CRITICAL</span></td></tr></tbody>
+</table>
+<p>Si une modalité manque ou est périmée, <code>degraded=true</code> et les raisons l'indiquent. Le dashboard affiche alors INDÉTERMINÉ plutôt que SAFE. Les pondérations sont <strong>explicites et démonstratives</strong> : elles ne constituent ni une probabilité calibrée ni une certification de sécurité.</p>
+
+<h2 id="api"><span class="num">7</span> API</h2>
+<table>
+  <thead><tr><th>Route</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /</code>, <code>GET /health</code></td><td>Identification et santé (publiques)</td></tr>
+    <tr><td><code>GET /status</code></td><td>Modèle, vision, visages et dernière prédiction</td></tr>
+    <tr><td><code>POST /analyze</code></td><td>Anomalie + vision courante + fusion + risque pour une mesure</td></tr>
+    <tr><td><code>POST /predict/anomaly</code></td><td>Résultat d'anomalie seul</td></tr>
+    <tr><td><code>POST /model/reload</code></td><td>Rechargement du modèle sans redémarrage</td></tr>
+    <tr><td><code>GET /vision/status</code>, <code>POST /vision/start</code>, <code>POST /vision/stop</code></td><td>Pilotage et état de la webcam</td></tr>
+    <tr><td><code>GET /vision/faces/status</code>, <code>/latest</code>, <code>/history</code></td><td>Catalogue et reconnaissances</td></tr>
+    <tr><td><code>POST /vision/faces/reload</code>, <code>POST /vision/faces/enroll</code></td><td>Rechargement et ajout de références</td></tr>
+    <tr><td><code>GET /stream.mjpg</code></td><td>Flux MJPEG annoté</td></tr>
+    <tr><td><code>GET /risk/latest</code></td><td>Dernier risque, ou <code>null</code></td></tr>
+  </tbody>
+</table>
+<p>Entrée de <code>/analyze</code> : <code>{temperature?, humidity?, gas?, presence?, timestamp, sample_id, source}</code>. Sortie (format illustratif) :</p>
+<pre><code>{
+  "sample_id": 42, "sensor_timestamp": "2026-10-06T16:00:00Z", "source": "live",
+  "anomaly": {
+    "status": "ready", "is_anomaly": true, "anomaly_score": 0.82, "confidence": 0.64,
+    "reason": "Abnormal temperature/gas evolution (correlated rise)",
+    "missing_fields": []
+  },
+  "vision": {
+    "status": "running", "person_detected": true, "person_count": 1,
+    "max_confidence": 0.91, "confirmed": true, "fps": 14.2, "inference_time_ms": 83.2
+  },
+  "risk": {
+    "risk_score": 100, "risk_level": "CRITICAL", "category": "MULTI_THREAT",
+    "reasons": ["Person detected by camera (confirmed)", "PIR sensor active"],
+    "confidence": 0.955, "degraded": false
+  }
+}</code></pre>
+
+<h2 id="config"><span class="num">8</span> Configuration</h2>
+<p>Variables lues dans <code>ai/.env</code> (modèle : <code>ai/.env.example</code>). Une modification exige un redémarrage du service.</p>
+<table>
+  <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>AI_HOST</code> / <code>AI_PORT</code></td><td>127.0.0.1 / 8001</td><td>Adresse d'écoute (locale uniquement)</td></tr>
+    <tr><td><code>AI_SERVICE_TOKEN</code></td><td>vide</td><td>Jeton partagé avec le backend</td></tr>
+    <tr><td><code>ANOMALY_MODEL</code></td><td>models/isolation_forest.joblib</td><td>Artefact du modèle</td></tr>
+    <tr><td><code>ANOMALY_WINDOW</code> / <code>ANOMALY_CONTAMINATION</code></td><td>12 / 0.03</td><td>Fenêtre des features, contamination à l'entraînement</td></tr>
+    <tr><td><code>SENSOR_STALE_SECONDS</code> / <code>VISION_STALE_SECONDS</code></td><td>30 / 5</td><td>Fraîcheur des preuves</td></tr>
+    <tr><td><code>VISION_CAMERA_INDEX</code>, <code>CAMERA_SCAN_LIMIT</code></td><td>0, 4</td><td>Choix de la webcam</td></tr>
+    <tr><td><code>YOLO_MODEL</code>, <code>YOLO_CONFIDENCE</code></td><td>models/yolov8n.pt, 0.55</td><td>Détecteur de personnes</td></tr>
+    <tr><td><code>VISION_CONFIRM_FRAMES</code>, <code>VISION_FRAME_STRIDE</code>, <code>VISION_MAX_FPS</code></td><td>3, 3, 15</td><td>Confirmation, cadence d'inférence, capture</td></tr>
+    <tr><td><code>VISION_TRACKING</code> / <code>VISION_AUTO_START</code></td><td>true / false</td><td>ByteTrack, démarrage automatique de la webcam</td></tr>
+    <tr><td><code>FACE_RECOGNITION_ENABLED</code>, <code>FACE_RECOGNITION_THRESHOLD</code></td><td>true, 0.55</td><td>Reconnaissance faciale</td></tr>
+    <tr><td><code>FACE_RECOGNITION_EVERY_N_FRAMES</code>, <code>FACE_RECOGNITION_MAX_FPS</code></td><td>3, 2</td><td>Cadence faciale</td></tr>
+    <tr><td><code>FACE_KNOWN_DIR</code>, <code>FACE_MIN_SIZE_PIXELS</code>, <code>FACE_EVENT_COOLDOWN_SECONDS</code></td><td>known_faces, 40, 5</td><td>Catalogue et filtrage</td></tr>
+    <tr><td><code>FACE_DETECTOR_MODEL</code>, <code>FACE_EMBEDDING_MODEL</code></td><td>models/*.onnx</td><td>Modèles YuNet et SFace</td></tr>
+  </tbody>
+</table>
+
+<h2 id="securite"><span class="num">9</span> Sécurité, robustesse, performances</h2>
+<ul>
+  <li><strong>Exposition</strong> : écoute sur la boucle locale. Si <code>AI_SERVICE_TOKEN</code> est défini, toutes les routes sauf <code>/</code> et <code>/health</code> exigent <code>Authorization: Bearer</code>. Le jeton reste côté serveur.</li>
+  <li><strong>Artefacts</strong> : joblib et YOLO désérialisent du code ; ne charger que des fichiers locaux de confiance. Le service n'installe ni ne télécharge rien en production.</li>
+  <li><strong>Démarrage</strong> : le port est réservé avant le chargement des modèles. Une instance Sentinel-X déjà active est détectée (message, code 0, pas de second accès à la webcam) ; un port occupé par un autre service produit une erreur explicite.</li>
+  <li><strong>Pannes</strong> : modèle absent (résultats <code>null</code>, statut explicite), webcam absente ou retirée (<code>unavailable</code>), YOLO absent (vidéo brute). Le backend continue de fonctionner sans le service IA.</li>
+  <li><strong>Ressources</strong> : une seule capture et un seul JPEG partagé, inférences espacées (1 image sur 3, faces 2/s au plus) ; FPS et temps d'inférence exposés dans le statut.</li>
+  <li><strong>Données personnelles</strong> : photos de référence et modèles ignorés par Git ; aucune image webcam enregistrée ni transmise au navigateur hors du flux vidéo.</li>
+</ul>
+
+<h2 id="qualite"><span class="num">10</span> Tests et limites</h2>
+<p>Les tests (<code>pytest</code>) entraînent leurs propres modèles temporaires sur des données synthétiques et utilisent des doubles pour les caméras et l'inférence. Ils couvrent le preprocessing commun, les données manquantes et invalides, les schémas, la fusion et le risque, la fraîcheur, la santé et le jeton, l'absence de caméra ou de modèle, la confirmation multi-images, le démarrage, l'arrêt et la reprise. Ils couvrent aussi la reconnaissance et l'enrôlement facial (refus, limites, retour arrière), l'export SQLite et la détection d'instance au démarrage.</p>
+<table>
+  <thead><tr><th>Vérification (état du dépôt à la génération)</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td><code>python -m pytest -q</code> (environnement de CI : sans modèles, OpenCV headless)</td><td><span class="pill ok">124 réussis</span> — 1 avertissement de dépréciation Starlette</td></tr>
+  </tbody>
+</table>
+<p>Des scripts d'intégration (<code>scripts/check-ai-integration.mjs</code>, <code>check-face-enrollment.mjs</code>, <code>check-camera-integration.mjs</code>, <code>check-face-models.py</code>) lancent des processus réels isolés. Le job <em>ai</em> de la CI exécute pytest sans modèle, webcam ni secret.</p>
+<div class="warn"><p><strong>Limites</strong> : aucun modèle de production n'est fourni ; la performance d'un modèle entraîné sur une simulation ne vaut pas validation sur du matériel réel. Les faux positifs de YOLO et le seuil facial doivent être évalués sur des séquences représentatives du site. La reconnaissance faciale est une fonction de démonstration et de monitoring, à ne jamais utiliser comme unique mécanisme de sécurité.</p></div>
+
+</body>
+</html>

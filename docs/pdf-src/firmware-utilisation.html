@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Boîtier ESP8266 · Guide d'utilisation</title>
+<meta name="pdf-name" content="Sentinel-X_Firmware_Guide-utilisation.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Guide d'utilisation</div>
+  <h1 class="outline-title">Boîtier Sentinel-X et firmware ESP8266</h1>
+  <div class="cover-title" aria-hidden="true">Boîtier Sentinel-X et firmware ESP8266</div>
+  <p class="cover-subtitle">Installer le firmware, mettre le boîtier en service, comprendre son écran et ses alarmes, et envoyer ses mesures au dashboard.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Public</dt><dd>Techniciens de mise en service et opérateurs du boîtier</dd>
+    <dt>Prérequis</dt><dd>Un PC avec PlatformIO, Python 3.12 et un câble micro-USB de données</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#presentation">Le boîtier en bref<span>Ce qu'il mesure et ce qu'il fait seul</span></a></li>
+    <li><a href="#preparation">Avant de commencer<span>Matériel, logiciels, vérifications</span></a></li>
+    <li><a href="#televerser">Installer le firmware<span>Compiler et téléverser avec PlatformIO</span></a></li>
+    <li><a href="#demarrage">Mettre en service<span>Séquence de démarrage et préchauffage</span></a></li>
+    <li><a href="#oled">Lire l'écran<span>Signification de chaque zone</span></a></li>
+    <li><a href="#alarmes">LEDs et buzzer<span>Comprendre les signaux du boîtier</span></a></li>
+    <li><a href="#passerelle">Envoyer les mesures au dashboard<span>Lancer la passerelle USB</span></a></li>
+    <li><a href="#verifier">Vérifier le bon fonctionnement<span>Recette rapide en 6 points</span></a></li>
+    <li><a href="#depannage">Dépannage<span>Symptômes, causes et solutions</span></a></li>
+  </ol>
+</section>
+
+<h2 id="presentation" style="margin-top:0"><span class="num">1</span> Le boîtier en bref</h2>
+<p>Le boîtier Sentinel-X surveille une zone sans présence humaine permanente. Il mesure en continu :</p>
+<ul>
+  <li>la <strong>température</strong> et l'<strong>humidité</strong> (capteur DHT22) ;</li>
+  <li>la présence de <strong>gaz ou de fumée</strong> (capteur MQ-2) ;</li>
+  <li>les <strong>mouvements</strong> dans la zone (détecteur infrarouge PIR).</li>
+</ul>
+<p>Il réagit <strong>seul</strong>, même sans réseau : en cas de gaz ou de mouvement, la LED rouge s'allume et le buzzer sonne. Son écran affiche en permanence les mesures et l'état du système. Relié par USB au PC serveur, il transmet ses mesures au dashboard web grâce à une petite application appelée <strong>passerelle USB</strong>.</p>
+<div class="note"><p>Le boîtier ne reçoit aucun ordre du PC : les boutons « LED » du dashboard n'agissent pas sur cette version du firmware. Les alarmes sont toujours décidées localement par le boîtier.</p></div>
+
+<h2 id="preparation"><span class="num">2</span> Avant de commencer</h2>
+<div class="grid-2">
+  <div class="card">
+    <h4>Matériel</h4>
+    <ul class="small">
+      <li>Boîtier Sentinel-X assemblé (NodeMCU ESP8266, DHT22, MQ-2, PIR, écran OLED, 3 LEDs, buzzer)</li>
+      <li>Câble micro-USB <strong>de données</strong> (certains câbles ne font que charger)</li>
+      <li>PC serveur Windows, macOS ou Linux</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Logiciels</h4>
+    <ul class="small">
+      <li><strong>PlatformIO</strong> (extension VS Code ou ligne de commande <code>pio</code>)</li>
+      <li><strong>Python 3.12</strong> avec l'environnement <code>ai/.venv</code> créé par le script d'installation</li>
+      <li><strong>Mosquitto</strong> (broker MQTT local), backend et dashboard démarrés</li>
+    </ul>
+  </div>
+</div>
+<p>Vérifiez le câblage avant la première mise sous tension. Le tableau ci-dessous reprend le brochage par défaut :</p>
+<table>
+  <thead><tr><th>Élément</th><th>Broche de la carte</th><th>Élément</th><th>Broche de la carte</th></tr></thead>
+  <tbody>
+    <tr><td>DHT22 (données)</td><td>D5</td><td>LED verte</td><td>D0</td></tr>
+    <tr><td>PIR (sortie)</td><td>D6</td><td>LED rouge</td><td>D4</td></tr>
+    <tr><td>MQ-2 (sortie analogique)</td><td>A0</td><td>LED orange</td><td>D8</td></tr>
+    <tr><td>Buzzer</td><td>D7</td><td>Écran OLED SDA / SCL</td><td>D2 / D1</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>Vérifiez la référence imprimée sur le capteur de température. Le firmware est configuré pour un <strong>DHT22</strong> : si votre capteur est un DHT11, faites adapter la configuration avant de téléverser (voir la documentation technique, section Configuration).</p></div>
+
+<h2 id="televerser"><span class="num">3</span> Installer le firmware</h2>
+<ol class="steps">
+  <li>Fermez tout programme qui utilise déjà le port USB de la carte : moniteur série, Arduino IDE ou passerelle USB.</li>
+  <li>Branchez la carte au PC avec le câble USB.</li>
+  <li>Depuis la racine du projet, compilez puis téléversez :
+<pre><code>pio run -d firmware -e nodemcuv2 -t upload</code></pre>
+  PlatformIO télécharge automatiquement les bibliothèques au premier lancement, puis trouve le port de la carte.</li>
+  <li>Pour voir les messages du boîtier, ouvrez le moniteur série (115 200 bauds) :
+<pre><code>pio device monitor -d firmware</code></pre>
+  Vous devez lire <code>DEMARRAGE SENTINEL-X V2</code>, le type de capteur DHT configuré, puis l'état de l'écran (<code>OLED : OK</code>).</li>
+  <li>Fermez le moniteur avec <kbd>Ctrl</kbd>+<kbd>C</kbd> avant de lancer la passerelle : un seul programme peut utiliser le port à la fois.</li>
+</ol>
+<div class="tip"><p>Avec l'extension PlatformIO de VS Code, ouvrez le dossier <code>firmware</code> et utilisez les boutons <em>Upload</em> (flèche) et <em>Serial Monitor</em> (prise) de la barre d'état.</p></div>
+
+<h2 id="demarrage"><span class="num">4</span> Mettre en service</h2>
+<p>À chaque mise sous tension, le boîtier passe par une phase de préparation d'environ <strong>une minute</strong>. Pendant ce temps, il ne déclenche aucune alarme : c'est normal.</p>
+<table>
+  <thead><tr><th>Moment</th><th>Ce qui se passe</th><th>Ce que vous voyez</th></tr></thead>
+  <tbody>
+    <tr><td>0 s</td><td>Démarrage, initialisation de l'écran</td><td>Écran « SENTINEL X — SECURITY SYSTEM — BOOTING… »</td></tr>
+    <tr><td>0 à 60 s</td><td>Préparation des capteurs</td><td>LED <strong>orange</strong> allumée, écran « STARTING… », bandeau <code>...</code></td></tr>
+    <tr><td>2 s</td><td>Première mesure de température et d'humidité</td><td>Valeurs affichées en grand sur l'écran</td></tr>
+    <tr><td>45 s</td><td>Fin de calibration du détecteur de mouvement</td><td><code>PIR OK</code> remplace <code>PIR...</code></td></tr>
+    <tr><td>60 s</td><td>Fin de chauffe du capteur de gaz</td><td><code>GAS NORMAL</code> remplace <code>GAS WARM</code></td></tr>
+    <tr><td>Ensuite</td><td>Surveillance active</td><td>LED <strong>verte</strong> allumée, écran « MONITORING », bandeau <code>OK</code></td></tr>
+  </tbody>
+</table>
+<div class="note"><p>Le capteur de gaz MQ-2 a souvent besoin de plusieurs minutes pour se stabiliser complètement après une longue période hors tension. Les premières valeurs peuvent être plus élevées que la normale.</p></div>
+
+<h2 id="oled"><span class="num">5</span> Lire l'écran</h2>
+<table>
+  <thead><tr><th>Zone de l'écran</th><th>Affichage</th><th>Signification</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="4">Bandeau (en haut à droite)</td><td><code>OK</code></td><td>Tout fonctionne, aucune alarme</td></tr>
+    <tr><td><code>...</code></td><td>Capteurs en préparation</td></tr>
+    <tr><td><code>ERR</code></td><td>La mesure de température/humidité est invalide</td></tr>
+    <tr><td><code>AL!</code></td><td>Alarme en cours</td></tr>
+    <tr><td>T et H</td><td><code>23.5C</code> <code>48%</code> ou <code>--.-C</code> <code>--%</code></td><td>Température et humidité ; tirets si la mesure est invalide</td></tr>
+    <tr><td rowspan="2">GAS</td><td><code>WARM</code> / <code>NORMAL</code> / <code>DANGER</code></td><td>Chauffe, normal, seuil d'alerte dépassé</td></tr>
+    <tr><td>barre + nombre</td><td>Valeur brute du capteur (0 à 1023) ; le trait vertical marque le seuil d'alerte</td></tr>
+    <tr><td>PIR</td><td><code>PIR...</code> / <code>PIR OK</code> / <code>MOVE!</code></td><td>Calibration, calme, mouvement détecté</td></tr>
+    <tr><td>Ligne du bas</td><td><code>MONITORING</code>, <code>STARTING...</code>, <code>DHT SENSOR ERROR</code>, messages d'alerte clignotants</td><td>Résumé de la situation</td></tr>
+  </tbody>
+</table>
+<p>La valeur de gaz est une <strong>mesure relative</strong>, pas une concentration en ppm : elle sert à repérer une hausse par rapport à la normale.</p>
+
+<h2 id="alarmes"><span class="num">6</span> LEDs et buzzer</h2>
+<table>
+  <thead><tr><th>Signal</th><th>Signification</th><th>Que faire ?</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill ok">Verte</span></td><td>Système prêt, mesures valides, aucune alarme</td><td>Rien : surveillance normale</td></tr>
+    <tr><td><span class="pill warn">Orange</span></td><td>Préparation en cours, ou capteur de température en erreur</td><td>Attendre une minute ; si elle persiste, voir le dépannage (DHT)</td></tr>
+    <tr><td><span class="pill danger">Rouge + buzzer</span></td><td>Mouvement détecté <strong>ou</strong> gaz au-dessus du seuil</td><td>Consulter l'écran (<code>MOVE!</code> ou <code>DANGER</code>) et le dashboard</td></tr>
+  </tbody>
+</table>
+<p>L'alarme s'arrête d'elle-même quand la cause disparaît. Pour le gaz, le boîtier attend que la valeur redescende nettement sous le seuil (550 au lieu de 600) avant de revenir à la normale, afin d'éviter un buzzer intermittent.</p>
+<div class="warn"><p>Le boîtier est un outil de surveillance de démonstration. Il ne remplace pas un détecteur de gaz ou d'incendie certifié.</p></div>
+
+<h2 id="passerelle"><span class="num">7</span> Envoyer les mesures au dashboard</h2>
+<p>La passerelle USB lit les messages du boîtier et les transmet au serveur. Le broker MQTT, le backend et le dashboard doivent être démarrés (voir le guide d'utilisation du backend).</p>
+<ol class="steps">
+  <li>Installez une fois les deux dépendances de la passerelle :
+<pre><code>.\ai\.venv\Scripts\python.exe -m pip install -r scripts\requirements-esp.txt</code></pre></li>
+  <li>Si le broker local n'est pas déjà lancé, démarrez-le dans un terminal dédié :
+<pre><code>mosquitto -c scripts\mosquitto-local.conf -v</code></pre></li>
+  <li>Repérez le port de la carte :
+<pre><code>.\ai\.venv\Scripts\python.exe scripts\esp_serial_bridge.py --list-ports</code></pre></li>
+  <li>Lancez la passerelle dans un autre terminal (ajoutez <code>--port COM7</code> si plusieurs cartes sont branchées) :
+<pre><code>.\ai\.venv\Scripts\python.exe scripts\esp_serial_bridge.py</code></pre></li>
+  <li>Attendez les messages « MQTT connecté », puis « Port COMx ouvert », puis des lignes <code>MQTT #…</code> contenant les mesures.</li>
+</ol>
+<p>Sous macOS ou Linux, remplacez <code>.\ai\.venv\Scripts\python.exe</code> par <code>ai/.venv/bin/python</code> et utilisez des <code>/</code> dans les chemins.</p>
+<div class="tip"><p>La passerelle se reconnecte seule si vous débranchez puis rebranchez la carte, même si Windows lui attribue un autre numéro de port. Arrêtez-la avec <kbd>Ctrl</kbd>+<kbd>C</kbd> avant de rouvrir le moniteur série.</p></div>
+
+<h2 id="verifier"><span class="num">8</span> Vérifier le bon fonctionnement</h2>
+<ol class="steps">
+  <li><strong>Démarrage</strong> : après une minute, la LED verte est allumée et l'écran affiche « MONITORING ».</li>
+  <li><strong>Mesures cohérentes</strong> : comparez la température et l'humidité affichées avec un thermomètre de référence.</li>
+  <li><strong>Mouvement</strong> : passez devant le détecteur. La LED rouge s'allume, le buzzer sonne, l'écran affiche <code>MOVE!</code>.</li>
+  <li><strong>Transmission</strong> : dans le dashboard, page <em>Métriques</em>, le panneau « État du boîtier ESP » affiche « Mouvement détecté » et « Alarme locale : Active ».</li>
+  <li><strong>Retour au calme</strong> : quelques secondes après votre départ, tout revient au vert.</li>
+  <li><strong>Coupure</strong> : débranchez l'USB. Après 30 secondes, le dashboard indique des états inconnus ; rebranchez, les mesures reprennent.</li>
+</ol>
+
+<h2 id="depannage"><span class="num">9</span> Dépannage</h2>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr></thead>
+  <tbody>
+    <tr><td>Le téléversement échoue : port introuvable ou occupé</td><td>Câble de charge seule, pilote USB manquant, port déjà ouvert</td><td>Changer de câble, installer le pilote CH340/CP210x de la carte, fermer le moniteur série et la passerelle</td></tr>
+    <tr><td>La carte ne démarre pas après le câblage</td><td>D8 tirée vers le haut au démarrage</td><td>Vérifier la LED orange sur D8 : elle doit être reliée vers la masse via sa résistance</td></tr>
+    <tr><td>Écran noir, LEDs fonctionnelles</td><td>Écran non détecté (câblage I2C, adresse)</td><td>Vérifier SDA sur D2, SCL sur D1 et l'alimentation ; le moniteur série affiche <code>OLED : NON DETECTE</code></td></tr>
+    <tr><td>LED orange permanente, <code>DHT SENSOR ERROR</code></td><td>Capteur de température mal câblé ou d'un autre type</td><td>Vérifier la broche D5, l'alimentation et la référence du capteur (DHT22 attendu)</td></tr>
+    <tr><td>Température aberrante (ex. 76,8 °C à l'intérieur)</td><td>Capteur d'un autre type que celui configuré, ou défectueux</td><td>Identifier le modèle exact, comparer avec un thermomètre, faire adapter <code>DHT_TYPE</code></td></tr>
+    <tr><td>Alarme gaz permanente après la chauffe</td><td>Capteur pas encore stabilisé ou tension trop élevée sur A0</td><td>Laisser chauffer plusieurs minutes ; vérifier le pont diviseur du module</td></tr>
+    <tr><td>Alarmes mouvement à répétition</td><td>Détecteur orienté vers une source de chaleur ou trop sensible</td><td>Réorienter le PIR, régler ses potentiomètres de sensibilité et de temporisation</td></tr>
+    <tr><td>La passerelle dit « MQTT connecté » mais aucune mesure</td><td>Port USB occupé ou mauvais port choisi</td><td>Fermer le moniteur série, lancer <code>--list-ports</code> puis <code>--port COMx</code></td></tr>
+    <tr><td>Le dashboard affiche « Broker MQTT déconnecté »</td><td>Mosquitto arrêté</td><td>Démarrer le broker, puis vérifier le backend</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

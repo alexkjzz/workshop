@@ -10,7 +10,7 @@ certificats generes restent sur votre machine et sont ignores par Git.
 - `iot-frontend/` : dashboard React/Vite, tests et build.
 - `iot-backend/` : API Express/TypeScript, MQTT, SQLite, authentification et relais IA.
 - `ai/` : FastAPI, Isolation Forest, YOLO + ByteTrack, fusion et reconnaissance faciale.
-- `firmware/` : firmware USB actuel ; `firmware-old/` : ancienne version reseau archivee.
+- `firmware/` : firmware ESP8266 actuel (capteurs, alarmes locales, sortie serie USB).
 - `scripts/` : installation Windows, passerelle USB et validations locales.
 - `.github/workflows/ci.yml` : verification automatique des applications, de l'IA
   et compilation du firmware.

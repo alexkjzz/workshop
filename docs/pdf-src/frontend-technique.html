@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Dashboard iot-frontend · Documentation technique</title>
+<meta name="pdf-name" content="Sentinel-X_Frontend_Documentation-technique.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Documentation technique</div>
+  <h1 class="outline-title">Dashboard web iot-frontend</h1>
+  <div class="cover-title" aria-hidden="true">Dashboard web iot-frontend</div>
+  <p class="cover-subtitle">Application React/Vite de supervision : métriques en temps réel, état du boîtier, analyses IA, caméra et reconnaissance faciale, paramètres de notification.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Pile</dt><dd>React 19, TypeScript, Vite, client Better Auth, SVG natif, nginx en production</dd>
+    <dt>Public</dt><dd>Développeurs frontend et jury technique</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#role">Rôle et principes<span>Un client léger qui ne parle qu'au backend</span></a></li>
+    <li><a href="#architecture">Architecture<span>Domaine, ports, adaptateurs, présentation</span></a></li>
+    <li><a href="#flux">Flux de données<span>Chargement initial, SSE, sondages, reconnexion</span></a></li>
+    <li><a href="#ecrans">Écrans et composants<span>Métriques, Caméra, Paramètres, Connexion</span></a></li>
+    <li><a href="#regles">Règles d'affichage<span>Fraîcheur, états inconnus, simulation</span></a></li>
+    <li><a href="#ux">Interface et accessibilité<span>Thème, responsive, graphiques</span></a></li>
+    <li><a href="#securite">Sécurité<span>Session, CSP, aucun secret côté client</span></a></li>
+    <li><a href="#build">Build, déploiement et tests<span>Vite, nginx, Docker, contrôles</span></a></li>
+  </ol>
+</section>
+
+<h2 id="role" style="margin-top:0"><span class="num">1</span> Rôle et principes</h2>
+<p><code>iot-frontend</code> est le dashboard de supervision des opérateurs. Il affiche en temps réel les mesures et l'état du boîtier, les analyses du service IA et la webcam du serveur. Il permet aussi de gérer la reconnaissance faciale et de régler les notifications.</p>
+<ul>
+  <li><strong>Un seul interlocuteur</strong> : l'application n'appelle que <code>/api/*</code> sur la même origine. Elle ne contacte jamais MQTT, FastAPI ni la caméra directement.</li>
+  <li><strong>Aucune donnée inventée</strong> : une mesure absente, périmée ou invalide s'affiche comme inconnue, jamais comme un zéro ou un état normal.</li>
+  <li><strong>Pas de dépendance graphique lourde</strong> : graphiques en SVG natif, icônes en ligne, aucune bibliothèque de composants.</li>
+</ul>
+<figure class="diagram">
+<svg viewBox="0 0 760 120" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6575"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+    <rect x="10" y="30" width="200" height="62" rx="8" fill="#2b62d9"/><text x="110" y="56" fill="#fff" font-weight="700">Dashboard React</text><text x="110" y="74" fill="#dbe6ff" font-size="9.5">Navigateur (ce document)</text>
+    <rect x="290" y="30" width="180" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="380" y="56" font-weight="700" fill="#142033">Vite (dév.) / nginx</text><text x="380" y="74" fill="#5b6575" font-size="9.5">Même origine, relais /api</text>
+    <rect x="550" y="30" width="200" height="62" rx="8" fill="#f4f6fa" stroke="#c9d1de"/><text x="650" y="56" font-weight="700" fill="#142033">Backend Express</text><text x="650" y="74" fill="#5b6575" font-size="9.5">REST · SSE · MJPEG · Better Auth</text>
+  </g>
+  <g stroke="#5b6575" stroke-width="1.6" marker-end="url(#c1)"><line x1="210" y1="61" x2="288" y2="61"/><line x1="470" y1="61" x2="548" y2="61"/></g>
+  <g font-size="9" fill="#5b6575" text-anchor="middle"><text x="249" y="52">HTTPS + cookie</text><text x="509" y="52">/api/*</text></g>
+</svg>
+<figcaption><b>Figure 1.</b> Le dashboard ne connaît que le backend, servi sur la même origine.</figcaption>
+</figure>
+
+<h2 id="architecture"><span class="num">2</span> Architecture</h2>
+<p>L'application suit la même <strong>clean architecture</strong> que le backend. Les composants React ne connaissent que des <strong>ports</strong>, c'est-à-dire des interfaces. Les implémentations concrètes sont instanciées une seule fois dans <code>main.tsx</code> et injectées par un contexte React (<code>ServicesContext</code>). Remplacer le transport (REST, SSE) ou l'authentification ne touche donc pas à la présentation.</p>
+<table>
+  <thead><tr><th>Couche</th><th>Dossier</th><th>Contenu</th></tr></thead>
+  <tbody>
+    <tr><td>Domaine</td><td><code>src/domain</code></td><td class="wrap">Types et règles pures : fusion et bornage de l'historique (<code>telemetry.ts</code>), fraîcheur de l'état du boîtier (<code>esp-status.ts</code>), priorité réel/simulation des analyses (<code>ai.ts</code>), détections et visages (<code>vision.ts</code>, <code>faces.ts</code>), validation de l'enrôlement (<code>face-enrollment.ts</code>), notifications, session</td></tr>
+    <tr><td>Application</td><td><code>src/application</code></td><td class="wrap">Ports <code>DeviceApi</code>, <code>AiApi</code>, <code>SettingsApi</code>, <code>LiveFeed</code>, <code>AuthService</code>, <code>ThemeStore</code> ; erreurs (<code>UnauthorizedError</code>) ; cas d'usage <code>startVisionAndWait</code></td></tr>
+    <tr><td>Infrastructure</td><td><code>src/infrastructure</code></td><td class="wrap">Client HTTP commun (<code>http-client.ts</code>), adaptateurs <code>HttpDeviceApi</code>, <code>HttpAiApi</code>, <code>HttpSettingsApi</code>, <code>SseLiveFeed</code> (EventSource), <code>BetterAuthService</code>, <code>LocalThemeStore</code>, préparation des photos (<code>face-enrollment-payload.ts</code>) et URL du flux (<code>camera-stream.ts</code>)</td></tr>
+    <tr><td>Présentation</td><td><code>src/presentation</code></td><td class="wrap"><code>App.tsx</code>, pages (<code>MetricsPage</code>, <code>CameraPage</code>, <code>SettingsPage</code>), composants, hooks (<code>useSession</code>, <code>useDeviceStatus</code>, <code>useLiveData</code>, <code>useNotificationSettings</code>, <code>useRoute</code>, <code>useTheme</code>), styles partagés <code>index.css</code></td></tr>
+    <tr><td>Composition</td><td><code>src/main.tsx</code></td><td>Instanciation des adaptateurs et rendu de l'application</td></tr>
+  </tbody>
+</table>
+<p>Le routage utilise le fragment d'URL (<code>#/metrics</code>, <code>#/camera</code>, <code>#/settings</code>), ce qui fonctionne derrière n'importe quel serveur statique sans règle de réécriture.</p>
+
+<h2 id="flux"><span class="num">3</span> Flux de données</h2>
+<table>
+  <thead><tr><th>Donnée</th><th>Mécanisme</th><th>Fréquence</th></tr></thead>
+  <tbody>
+    <tr><td>Session</td><td><code>AuthService.getSession()</code> au démarrage, puis à chaque 401</td><td>à la demande</td></tr>
+    <tr><td>État MQTT et dernière mesure physique</td><td><code>GET /api/status</code></td><td>toutes les 2 s</td></tr>
+    <tr><td>Historique des mesures</td><td><code>GET /api/readings?limit=150</code> puis événements SSE <code>reading</code></td><td>initial + temps réel</td></tr>
+    <tr><td>Analyses IA</td><td><code>/api/ai/history</code> et <code>/api/ai/latest</code>, puis SSE <code>ai</code></td><td>initial + temps réel</td></tr>
+    <tr><td>Disponibilité IA, webcam, visages</td><td>SSE <code>ai-status</code> et <code>GET /api/ai/status</code></td><td>temps réel + toutes les 5 s</td></tr>
+    <tr><td>Détections vision externes</td><td><code>GET /api/vision</code> puis SSE <code>vision</code></td><td>initial + temps réel</td></tr>
+    <tr><td>Vidéo</td><td>Balise image sur <code>/api/camera/stream</code> (MJPEG)</td><td>flux continu</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>Un seul EventSource</strong> (<code>/api/stream</code>) transporte les quatre types d'événements.</li>
+  <li><strong>Fusion sans doublon</strong> : l'historique et le direct sont fusionnés par identifiant, triés par heure de mesure et bornés à 150 mesures (environ 5 minutes) et 50 analyses. Une mesure arrivée en retard prend sa place chronologique.</li>
+  <li><strong>Reconnexion</strong> : après une coupure réseau, l'historique est rechargé pour récupérer les événements manqués. Si le serveur ferme le flux (session expirée, redémarrage), la session est revérifiée et le flux rouvert après 5 s.</li>
+  <li><strong>Pas de régression</strong> : une réponse HTTP plus ancienne ne remplace jamais un état SSE plus récent.</li>
+  <li><strong>Démarrage de la webcam</strong> : <code>startVisionAndWait</code> envoie <code>start</code>, puis interroge <code>/api/ai/vision/status</code> chaque seconde (20 s maximum) jusqu'à l'état <code>running</code>. Le flux vidéo n'est ouvert qu'à ce moment, avec une URL unique à chaque tentative.</li>
+</ul>
+
+<h2 id="ecrans"><span class="num">4</span> Écrans et composants</h2>
+<figure class="half">
+  <img src="assets/metrics-top.png" alt="Page Métriques">
+  <figcaption><b>Figure 2.</b> Page Métriques : barre de navigation, indicateur MQTT, état du boîtier, cartes capteurs.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Écran</th><th>Composants</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td>Toutes les pages</td><td><code>Topbar</code></td><td>Navigation, utilisateur connecté, déconnexion, bascule clair/sombre</td></tr>
+    <tr><td>Connexion</td><td><code>LoginForm</code></td><td>E-mail et mot de passe ; messages pour identifiants invalides et blocage temporaire</td></tr>
+    <tr><td rowspan="5">Métriques</td><td><code>StatusIndicator</code></td><td>Pastille verte/rouge/grise de l'état du broker</td></tr>
+    <tr><td><code>EspStatusPanel</code></td><td>Gaz, PIR, DHT, alarme locale et LEDs remontés par le firmware</td></tr>
+    <tr><td><code>LineChart</code> + tableaux</td><td>Valeur courante, graphique temps réel et 20 dernières mesures par capteur</td></tr>
+    <tr><td><code>AiPanel</code>, <code>VisionCamera</code></td><td>AI ENGINE : anomalie, risque, confiance, raisons, webcam et événements récents</td></tr>
+    <tr><td>Commande LED</td><td>Boutons ON/OFF (nécessitent un firmware MQTT compatible)</td></tr>
+    <tr><td rowspan="3">Caméra</td><td><code>CameraFeed</code>, <code>VisionControls</code></td><td>Flux vidéo, démarrage/arrêt de la webcam, réessai</td></tr>
+    <tr><td><code>FaceRecognitionPanel</code></td><td>Visages courants, catalogue, rechargement, historique des reconnaissances</td></tr>
+    <tr><td><code>FaceEnrollmentForm</code></td><td>Ajout d'une personne : nom, 1 à 5 photos, aperçus locaux, bilan photo par photo</td></tr>
+    <tr><td>Paramètres</td><td><code>SettingsPage</code></td><td>Adresse de réception, activation, types d'alertes, e-mail de test</td></tr>
+  </tbody>
+</table>
+
+<h2 id="regles"><span class="num">5</span> Règles d'affichage</h2>
+<ul>
+  <li><strong>État du boîtier</strong> : sans mesure physique depuis 30 s, tous les états passent à « Inconnu ». Les indicateurs absents (préchauffage, capteur en erreur) restent inconnus.</li>
+  <li><strong>Graphiques</strong> : une interruption de plus de 10 s entre deux mesures coupe la courbe au lieu de relier les points ; une mesure isolée est affichée comme un point.</li>
+  <li><strong>Analyses IA</strong> : une analyse réelle récente (moins de 30 s) est prioritaire sur une analyse simulée. Les données de démonstration portent la mention <strong>SIMULATION</strong>. Une couverture incomplète affiche « Analyse partielle » et un niveau <strong>INDÉTERMINÉ</strong> plutôt que SAFE.</li>
+  <li><strong>Vision</strong> : une détection de plus de 5 s n'est plus présentée comme courante ; un visage inconnu est signalé.</li>
+  <li><strong>Erreurs</strong> : un 401 renvoie à l'écran de connexion ; les messages du serveur sont affichés tels quels dans la zone concernée.</li>
+</ul>
+
+<h2 id="ux"><span class="num">6</span> Interface et accessibilité</h2>
+<ul>
+  <li><strong>Thème</strong> : clair ou sombre, il suit le système jusqu'au premier choix, puis le mémorise (<code>localStorage</code>). <code>public/theme-init.js</code> l'applique avant le premier affichage pour éviter un flash. C'est un fichier externe, pour rester compatible avec la CSP.</li>
+  <li><strong>Couleurs</strong> : jetons CSS communs (<code>index.css</code>) pour les deux thèmes ; une couleur d'état est toujours accompagnée d'un texte, jamais seule.</li>
+  <li><strong>Responsive</strong> : grilles adaptatives jusqu'à 320 px de large ; les tableaux larges défilent dans leur propre conteneur.</li>
+  <li><strong>Accessibilité</strong> : focus clavier visible, libellés ARIA sur les boutons à icône, légendes cachées sur les tableaux, zones <code>aria-live</code> pour les messages, animations désactivées si le système le demande.</li>
+  <li><strong>Graphiques</strong> : SVG avec ligne de 2 px, aplat léger, grille discrète, infobulle et réticule au survol ; le tableau des dernières mesures sert d'alternative textuelle.</li>
+</ul>
+<figure class="narrow">
+  <img src="assets/sensor-card-tooltip.png" alt="Carte capteur avec graphique">
+  <figcaption><b>Figure 3.</b> Carte capteur : valeur courante, graphique temps réel et dernières mesures.</figcaption>
+</figure>
+
+<h2 id="securite"><span class="num">7</span> Sécurité</h2>
+<ul>
+  <li>La session est un cookie <code>HttpOnly</code> géré par Better Auth : il n'est pas lisible par le JavaScript de la page.</li>
+  <li>Aucun secret ni URL interne (FastAPI, broker, jeton IA) n'est présent dans le code client.</li>
+  <li>En production, nginx applique une Content Security Policy stricte (<code>default-src 'self'</code>, <code>frame-ancestors 'none'</code>), <code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code> et <code>Referrer-Policy: no-referrer</code>.</li>
+  <li>Les photos d'enrôlement sont vérifiées côté client (format, taille, nombre) pour un retour immédiat. Le serveur refait toutes les vérifications, qui seules font foi.</li>
+</ul>
+
+<h2 id="build"><span class="num">8</span> Build, déploiement et tests</h2>
+<pre><code>npm run dev      # Vite, /api relayé vers http://127.0.0.1:3001
+npm test         # règles du domaine et adaptateurs (runner natif de Node)
+npm run lint     # oxlint
+npm run build    # tsc -b puis vite build vers dist/</code></pre>
+<p><strong>Production</strong> : l'image Docker compile l'application puis la sert avec <code>nginx-unprivileged</code> (utilisateur non-root, port 8080). nginx relaie <code>/api/</code> vers le backend sur le réseau interne, avec une limite de taille élargie uniquement pour la route d'enrôlement facial.</p>
+<table>
+  <thead><tr><th>Vérification (état du dépôt à la génération)</th><th>Résultat</th></tr></thead>
+  <tbody>
+    <tr><td><code>npm test</code> — domaine, flux SSE, IA, visages, enrôlement, démarrage webcam</td><td><span class="pill ok">39/39 réussis</span></td></tr>
+    <tr><td><code>npm run lint</code></td><td><span class="pill ok">aucun avertissement</span></td></tr>
+    <tr><td><code>npm run build</code></td><td><span class="pill ok">réussi</span></td></tr>
+  </tbody>
+</table>
+<p><code>node scripts/check-frontend-style.mjs</code> pilote un navigateur sur une instance Vite isolée, avec des réponses d'API factices. Il contrôle les pages en clair et en sombre, à 1440, 375 et 320 px, le focus clavier et les contrastes. La CI GitHub Actions exécute tests, lint et build sur Node 24.</p>
+
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sentinel-X · Backend iot-backend · Guide d'exploitation</title>
+<meta name="pdf-name" content="Sentinel-X_Backend_Guide-utilisation.pdf">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a9c2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    SENTINEL-X
+  </div>
+  <div class="cover-kind">Guide d'utilisation et d'exploitation</div>
+  <h1 class="outline-title">Serveur iot-backend</h1>
+  <div class="cover-title" aria-hidden="true">Serveur iot-backend</div>
+  <p class="cover-subtitle">Installer, configurer, démarrer et surveiller le serveur de la plateforme : comptes, e-mails, données, mode démonstration et dépannage.</p>
+  <dl class="cover-meta">
+    <dt>Projet</dt><dd>Sentinel-X — Workshop EPSI Bac+4, consortium AetherCorp</dd>
+    <dt>Public</dt><dd>Administrateurs et exploitants du PC Serveur Local</dd>
+    <dt>Prérequis</dt><dd>Node.js 22.13 ou plus récent (24 conseillé), Mosquitto, accès administrateur au poste</dd>
+    <dt>Version</dt><dd>Octobre 2026 — état du dépôt à la date de génération</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#role">Rôle du serveur<span>Ce que vous exploitez</span></a></li>
+    <li><a href="#installation">Installation<span>Windows, macOS/Linux, Docker</span></a></li>
+    <li><a href="#configuration">Configuration<span>Fichier .env et secret de session</span></a></li>
+    <li><a href="#comptes">Comptes opérateurs<span>Créer les accès au dashboard</span></a></li>
+    <li><a href="#demarrer">Démarrer et arrêter<span>Services, ordre de lancement, ports</span></a></li>
+    <li><a href="#verifier">Vérifier le fonctionnement<span>Santé, journaux, API</span></a></li>
+    <li><a href="#emails">Activer les e-mails<span>SMTP et e-mail de test</span></a></li>
+    <li><a href="#donnees">Gérer les données<span>Emplacement, sauvegarde, rétention, export</span></a></li>
+    <li><a href="#demo">Mode démonstration<span>Simulateur et précautions</span></a></li>
+    <li><a href="#depannage">Dépannage<span>Symptômes et solutions</span></a></li>
+  </ol>
+</section>
+
+<h2 id="role" style="margin-top:0"><span class="num">1</span> Rôle du serveur</h2>
+<p>Le serveur <code>iot-backend</code> est le cœur de la plateforme Sentinel-X. Il fonctionne sur le <strong>PC Serveur Local</strong> et assure les fonctions suivantes :</p>
+<ul>
+  <li>il reçoit les mesures du boîtier par le broker MQTT et les <strong>enregistre</strong> (7 jours par défaut) ;</li>
+  <li>il <strong>protège l'accès</strong> au dashboard par identifiant et mot de passe ;</li>
+  <li>il transmet les mesures au <strong>service IA</strong> et relaie la vidéo de la webcam ;</li>
+  <li>il envoie les <strong>alertes par e-mail</strong> (intrusion, visage inconnu, boîtier hors ligne).</li>
+</ul>
+<p>Le dashboard web s'adresse uniquement à ce serveur. Si le serveur est arrêté, plus rien ne s'affiche ; le boîtier, lui, continue de déclencher ses alarmes locales.</p>
+<table>
+  <thead><tr><th>Service</th><th>Port par défaut</th><th>Accès</th></tr></thead>
+  <tbody>
+    <tr><td>Broker MQTT (Mosquitto)</td><td>1883</td><td>local uniquement</td></tr>
+    <tr><td>Serveur iot-backend</td><td>3001</td><td>via le dashboard</td></tr>
+    <tr><td>Dashboard (développement / Docker)</td><td>5173 / 8080</td><td>navigateur</td></tr>
+    <tr><td>Service IA FastAPI</td><td>8001</td><td>local uniquement</td></tr>
+  </tbody>
+</table>
+
+<h2 id="installation"><span class="num">2</span> Installation</h2>
+<h3>Windows (recommandé pour le workshop)</h3>
+<p>Ouvrez PowerShell à la racine du projet et lancez :</p>
+<pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1</code></pre>
+<p>Le script installe les dépendances du backend et du dashboard, crée l'environnement Python de l'IA et prépare les fichiers <code>.env</code> manquants à partir des exemples. Il génère aussi le secret de session sans l'afficher. Il ne modifie pas une configuration existante et ne démarre aucun service.</p>
+<h3>macOS ou Linux</h3>
+<pre><code>bash install.sh</code></pre>
+<p>Le script vérifie Node.js, installe Mosquitto (Homebrew sur macOS) et les dépendances npm. Sous Linux, installez d'abord Node.js, npm et Mosquitto avec le gestionnaire de paquets du système.</p>
+<h3>Docker</h3>
+<pre><code>cp .env.example .env          # puis renseigner BETTER_AUTH_SECRET
+docker compose up -d --build</code></pre>
+<p>Le dashboard est alors servi sur <code>http://localhost:8080</code>. Le broker MQTT et le service IA restent installés sur la machine hôte.</p>
+
+<h2 id="configuration"><span class="num">3</span> Configuration</h2>
+<p>La configuration se trouve dans <code>iot-backend/.env</code>, créé à partir de <code>iot-backend/.env.example</code>. Les valeurs par défaut conviennent à une installation locale. Seul le secret de session est obligatoire.</p>
+<ol class="steps">
+  <li>Si le script d'installation ne l'a pas fait, générez un secret aléatoire :
+<pre><code>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"</code></pre></li>
+  <li>Collez-le dans <code>BETTER_AUTH_SECRET=</code>. Ne le partagez jamais et ne le versionnez pas.</li>
+  <li>Pour accéder au dashboard depuis un autre poste du réseau de table, ajoutez son adresse à <code>FRONTEND_ORIGINS</code> et à <code>BETTER_AUTH_URL</code>, par exemple <code>http://192.168.10.1:5173</code>.</li>
+</ol>
+<table>
+  <thead><tr><th>Paramètre</th><th>À modifier quand…</th></tr></thead>
+  <tbody>
+    <tr><td><code>MQTT_URL</code></td><td>le broker n'est pas sur la même machine ou utilise un autre port</td></tr>
+    <tr><td><code>AI_SERVICE_URL</code></td><td>le service IA utilise un autre port, ou pour le désactiver (valeur vide)</td></tr>
+    <tr><td><code>AI_SERVICE_TOKEN</code></td><td>vous protégez le service IA par un jeton (même valeur dans <code>ai/.env</code>)</td></tr>
+    <tr><td><code>READINGS_RETENTION_DAYS</code></td><td>vous souhaitez conserver l'historique plus ou moins longtemps</td></tr>
+    <tr><td><code>SMTP_*</code>, <code>MAIL_FROM</code></td><td>vous activez l'envoi des alertes par e-mail (section 7)</td></tr>
+  </tbody>
+</table>
+<div class="warn"><p>Changer <code>BETTER_AUTH_SECRET</code> déconnecte tous les utilisateurs. Toute modification de <code>.env</code> nécessite de redémarrer le serveur.</p></div>
+
+<h2 id="comptes"><span class="num">4</span> Comptes opérateurs</h2>
+<p>Pour des raisons de sécurité, l'inscription depuis le dashboard est désactivée. Créez chaque compte depuis le dossier <code>iot-backend</code> :</p>
+<pre><code>npm run user:create -- operateur@aethercorp.fr "Prénom Nom"</code></pre>
+<p>Le mot de passe est demandé deux fois, sans affichage, et doit contenir au moins <strong>12 caractères</strong>. Sous Docker :</p>
+<pre><code>docker compose exec backend node dist/cli/create-user.js operateur@aethercorp.fr "Prénom Nom"</code></pre>
+<ul>
+  <li>Une session dure 8 heures ; l'opérateur doit ensuite se reconnecter.</li>
+  <li>Après 5 tentatives de connexion échouées en une minute depuis une même adresse, les connexions sont bloquées pendant une minute.</li>
+  <li>Chaque commande LED et chaque modification des paramètres sont enregistrées dans le journal avec l'e-mail de l'opérateur.</li>
+</ul>
+
+<h2 id="demarrer"><span class="num">5</span> Démarrer et arrêter</h2>
+<p>Démarrez les services dans cet ordre, chacun dans son propre terminal ouvert à la racine du projet :</p>
+<ol class="steps">
+  <li><strong>Broker MQTT</strong> (s'il n'est pas déjà lancé comme service) :
+<pre><code>&amp; 'C:\Program Files\mosquitto\mosquitto.exe' -c .\scripts\mosquitto-local.conf -v</code></pre></li>
+  <li><strong>Serveur iot-backend</strong> :
+<pre><code>Set-Location .\iot-backend
+node --env-file=.env --import tsx src/main.ts</code></pre>
+  Attendez « HTTP server listening on http://localhost:3001 » puis « Connected to MQTT broker ».</li>
+  <li><strong>Service IA</strong> (facultatif, voir le guide IA) :
+<pre><code>Set-Location .\ai
+.\.venv\Scripts\python.exe -m app.main</code></pre></li>
+  <li><strong>Dashboard</strong> :
+<pre><code>Set-Location .\iot-frontend
+npm.cmd run dev -- --host 127.0.0.1</code></pre></li>
+  <li><strong>Passerelle USB</strong> du boîtier (voir le guide du firmware).</li>
+</ol>
+<p>Pour arrêter un service, appuyez sur <kbd>Ctrl</kbd>+<kbd>C</kbd> dans son terminal. Le serveur ferme proprement ses connexions et ses bases.</p>
+<div class="note"><p>Sous macOS/Linux, <code>bash run.sh</code> lance d'un coup un <strong>mode de test sans boîtier</strong> (broker, serveur, dashboard et simulateur), et <code>bash stop.sh</code> l'arrête. Ce mode publie des données simulées : ne l'utilisez pas pendant une validation avec le vrai matériel.</p></div>
+
+<h2 id="verifier"><span class="num">6</span> Vérifier le fonctionnement</h2>
+<table>
+  <thead><tr><th>Contrôle</th><th>Comment</th><th>Résultat attendu</th></tr></thead>
+  <tbody>
+    <tr><td>Le serveur répond</td><td>Ouvrir <code>http://127.0.0.1:3001/api/health</code></td><td><code>{"status":"ok"}</code></td></tr>
+    <tr><td>La connexion fonctionne</td><td>Ouvrir le dashboard et se connecter</td><td>Page <em>Métriques</em> affichée</td></tr>
+    <tr><td>Le broker est joint</td><td>Indicateur en haut de la page <em>Métriques</em></td><td>« Broker MQTT connecté » (vert)</td></tr>
+    <tr><td>Les mesures arrivent</td><td>Panneau « État du boîtier ESP »</td><td>« Dernières mesures reçues » et états à jour</td></tr>
+    <tr><td>L'IA est disponible</td><td>Panneau « AI ENGINE »</td><td>Pastille « ONLINE »</td></tr>
+    <tr><td>Les alertes partent</td><td>Paramètres → « Envoyer un e-mail de test »</td><td>E-mail reçu</td></tr>
+  </tbody>
+</table>
+<p>Le terminal du serveur affiche les événements importants : connexion au broker, prédictions IA enregistrées, alertes envoyées, commandes LED avec l'auteur, messages ignorés car invalides.</p>
+
+<h2 id="emails"><span class="num">7</span> Activer les e-mails</h2>
+<p>Renseignez les paramètres de votre serveur d'envoi dans <code>iot-backend/.env</code>, puis redémarrez :</p>
+<pre><code>SMTP_HOST=smtp.exemple.fr
+SMTP_PORT=587
+SMTP_SECURE=false          # true pour le port 465 (TLS implicite)
+SMTP_USER=sentinel@exemple.fr
+SMTP_PASSWORD=mot-de-passe-applicatif
+MAIL_FROM=SENTINEL-X &lt;sentinel@exemple.fr&gt;</code></pre>
+<p>Le chiffrement STARTTLS est exigé sur le port 587. Ensuite, l'adresse de réception se règle dans le dashboard, onglet <strong>Paramètres</strong>, par un opérateur connecté. Le bouton <strong>Envoyer un e-mail de test</strong> confirme la configuration.</p>
+<div class="tip"><p>Sans serveur SMTP, aucun e-mail ne part et la page Paramètres l'indique. En mode test (<code>run.sh</code>), les e-mails sont écrits sous forme de fichiers <code>.eml</code> dans <code>.runtime/mail/</code>, lisibles avec n'importe quel client mail.</p></div>
+<p>Pour éviter le spam, un même type d'alerte est envoyé au plus une fois toutes les 5 minutes.</p>
+
+<h2 id="donnees"><span class="num">8</span> Gérer les données</h2>
+<table>
+  <thead><tr><th>Fichier</th><th>Contenu</th></tr></thead>
+  <tbody>
+    <tr><td><code>iot-backend/data/auth.db</code></td><td>Comptes et sessions des opérateurs</td></tr>
+    <tr><td><code>iot-backend/data/telemetry.db</code></td><td>Historique des mesures et des analyses IA</td></tr>
+    <tr><td><code>iot-backend/data/settings.db</code></td><td>Paramètres des notifications</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>Sauvegarde</strong> : arrêtez le serveur puis copiez le dossier <code>data/</code> ; ou, à chaud, utilisez <code>sqlite3 data/telemetry.db ".backup sauvegarde.db"</code>. Sous Docker, les bases sont dans le volume <code>backend-data</code>.</li>
+  <li><strong>Rétention</strong> : les mesures et analyses plus anciennes que <code>READINGS_RETENTION_DAYS</code> (7 jours) sont supprimées automatiquement chaque heure.</li>
+  <li><strong>Confidentialité</strong> : ces fichiers sont ignorés par Git ; ne les ajoutez jamais au dépôt.</li>
+  <li><strong>Export pour l'IA</strong> : le service IA lit <code>telemetry.db</code> en lecture seule pour exporter uniquement les mesures réelles (voir le guide IA).</li>
+</ul>
+
+<h2 id="demo"><span class="num">9</span> Mode démonstration</h2>
+<p>Sans boîtier, le simulateur publie des mesures cohérentes (dérive de température, pic de gaz toutes les 4 minutes, passage d'une personne 20 s par minute) et une caméra factice :</p>
+<pre><code>npm --prefix iot-backend run simulate</code></pre>
+<p>Toutes ses données portent la mention <strong>simulation</strong>. Elles apparaissent dans les graphiques et l'historique, mais ne modifient pas l'état réel du boîtier et ne déclenchent aucune notification. Arrêtez toujours le simulateur avant de brancher le vrai boîtier, pour ne pas mélanger les sources.</p>
+
+<h2 id="depannage"><span class="num">10</span> Dépannage</h2>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr></thead>
+  <tbody>
+    <tr><td>Le serveur refuse de démarrer : <code>BETTER_AUTH_SECRET must be set</code></td><td>Secret absent ou trop court</td><td>Générer un secret de 32 caractères minimum (section 3)</td></tr>
+    <tr><td><code>node:sqlite</code> introuvable</td><td>Version de Node.js trop ancienne</td><td>Installer Node.js 22.13 ou plus récent (24 conseillé)</td></tr>
+    <tr><td><code>EADDRINUSE</code> sur le port 3001</td><td>Une autre instance tourne déjà</td><td>Arrêter l'ancienne instance avant de relancer ; une seconde instance ne remplace pas la première</td></tr>
+    <tr><td>« Broker MQTT déconnecté »</td><td>Mosquitto arrêté ou mauvaise adresse</td><td>Démarrer le broker, vérifier <code>MQTT_URL</code></td></tr>
+    <tr><td>Connexion refusée avec un compte valide (403)</td><td>Le dashboard est ouvert depuis une adresse non déclarée</td><td>Ajouter cette adresse à <code>FRONTEND_ORIGINS</code> et redémarrer</td></tr>
+    <tr><td>« Trop de tentatives »</td><td>Protection contre la force brute</td><td>Attendre une minute</td></tr>
+    <tr><td>Panneau IA « OFFLINE »</td><td>Service IA arrêté, port ou jeton différent</td><td>Démarrer l'IA, vérifier <code>AI_SERVICE_URL</code> et <code>AI_SERVICE_TOKEN</code> des deux côtés</td></tr>
+    <tr><td>Flux vidéo indisponible</td><td>Webcam non démarrée, ancien <code>VISION_STREAM_URL</code> resté défini</td><td>Démarrer la webcam depuis le dashboard ; retirer <code>VISION_STREAM_URL</code> du <code>.env</code></td></tr>
+    <tr><td>Aucun e-mail reçu</td><td>SMTP non configuré, notifications désactivées, délai anti-spam</td><td>Tester depuis Paramètres ; consulter le journal du serveur</td></tr>
+    <tr><td>Les valeurs courantes restent vides</td><td>Seules des données simulées arrivent</td><td>Normal : l'état courant ne reflète que le boîtier physique</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>
