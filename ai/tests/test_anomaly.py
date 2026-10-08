@@ -78,3 +78,68 @@ def test_reject_nonfinite_and_invalid_presence():
     with pytest.raises(ValidationError):
         SensorSample(presence=2)
     assert SensorSample(presence=1).presence is True
+
+
+def test_sensor_limits_preserve_valid_channels_and_do_not_guess_indoor_temperature():
+    sample = SensorSample(temperature=1000000, humidity=-5, gas=120, presence=True)
+    assert sample.temperature is None and sample.humidity is None
+    assert sample.gas == 120 and sample.presence is True
+    assert len(sample.quality_issues) == 2
+    assert "quality_issues" not in sample.model_dump()
+    suspicious = SensorSample(temperature=76.8, humidity=6.9, gas=1023)
+    assert suspicious.temperature == 76.8 and suspicious.humidity == 6.9
+    assert not suspicious.quality_issues  # Sensor type/calibration needs a hardware diagnosis.
+    assert SensorSample(temperature=-40, humidity=0, gas=0).quality_issues == []
+    assert SensorSample(temperature=80, humidity=100, gas=1023).quality_issues == []
+    assert SensorSample(gas=-1).gas is None and SensorSample(gas=1024).gas is None
+    for field in ("temperature", "humidity", "gas"):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with pytest.raises(ValidationError):
+                SensorSample(**{field: value})
+
+
+def test_older_feature_input_cannot_reset_or_overwrite_current_history():
+    extractor = FeatureExtractor(dict(zip(BASE_FEATURES, [23, 52, 140, 0])))
+    now = utc_now()
+    extractor.extract(SensorSample(temperature=23, gas=100, timestamp=now))
+    with pytest.raises(ValueError, match="precedes"):
+        extractor.extract(SensorSample(temperature=70, gas=900, timestamp=now - timedelta(seconds=1)))
+    features, _ = extractor.extract(SensorSample(temperature=24, gas=110, timestamp=now + timedelta(seconds=1)))
+    assert features["temp_delta"] == 1 and features["gas_delta"] == 10
+    assert len(extractor.history) == 2
+
+
+def test_same_second_samples_do_not_invent_sampling_rate():
+    extractor = FeatureExtractor(dict(zip(BASE_FEATURES, [23, 52, 140, 0])))
+    now = utc_now()
+    extractor.extract(SensorSample(sample_id=1, temperature=23, gas=100, timestamp=now))
+    features, _ = extractor.extract(SensorSample(sample_id=2, temperature=24, gas=110, timestamp=now))
+    assert features["temp_delta"] == 1 and features["gas_delta"] == 10
+    assert features["temp_rate"] == 0 and features["gas_rate"] == 0
+
+
+def test_live_and_simulation_inference_have_separate_temporal_windows(model_path):
+    detector = AnomalyDetector(model_path)
+    now = utc_now()
+    detector.predict(SensorSample(temperature=23, gas=100, timestamp=now))
+    detector.predict(SensorSample(temperature=70, gas=900, source="simulation", timestamp=now))
+    live = detector.predict(SensorSample(temperature=24, gas=110, timestamp=now + timedelta(seconds=1)))
+    simulated = detector.predict(SensorSample(temperature=71, gas=910, source="simulation",
+                                             timestamp=now + timedelta(seconds=1)))
+    assert live.status == simulated.status == "ready"
+    assert live.features["temp_delta"] == simulated.features["temp_delta"] == 1
+    assert live.features["gas_delta"] == simulated.features["gas_delta"] == 10
+    assert len(detector.extractor.history) == len(detector.simulation_extractor.history) == 2
+
+
+def test_csv_and_direct_training_reject_invalid_sensor_channels(tmp_path):
+    csv = tmp_path / "invalid.csv"
+    csv.write_text("temperature,humidity,gas,presence\n81,52,140,0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Invalid CSV row 2.*temperature outside"):
+        read_samples(csv)
+    samples = normal_samples(128)
+    samples[0] = SensorSample(temperature=81, humidity=52, gas=140, presence=False)
+    output = tmp_path / "must-not-exist.joblib"
+    with pytest.raises(ValueError, match="outside physical ranges"):
+        train(samples, output)
+    assert not output.exists()

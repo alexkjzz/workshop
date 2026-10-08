@@ -25,11 +25,14 @@ class FeatureExtractor:
         values = {name: float(getattr(sample, name)) if name not in missing else self.medians[name]
                   for name in BASE_FEATURES}
         previous = self.history[-1] if self.history else None
-        # A source transition or a long outage is a new temporal sequence.
-        if previous and (sample.source != previous[0].source or
-                         not 0 < (sample.timestamp - previous[0].timestamp).total_seconds() <= 30):
-            self.reset()
-            previous = None
+        if previous:
+            interval = (sample.timestamp - previous[0].timestamp).total_seconds()
+            if sample.source == previous[0].source and interval < 0:
+                raise ValueError("Sensor timestamp precedes the current feature window")
+            # A source transition or a long outage is a new temporal sequence.
+            if sample.source != previous[0].source or interval > 30:
+                self.reset()
+                previous = None
         temp_delta = values["temperature"] - previous[1]["temperature"] if previous else 0.0
         gas_delta = values["gas"] - previous[1]["gas"] if previous else 0.0
         # Missing values are imputed, but must not fabricate jumps or correlations.
@@ -45,8 +48,10 @@ class FeatureExtractor:
             **values, "temp_delta": temp_delta, "gas_delta": gas_delta,
             "temp_mean": float(temp.mean()), "temp_std": float(temp.std()),
             "gas_mean": float(gas.mean()), "gas_std": float(gas.std()),
-            "temp_rate": temp_delta / max(elapsed, 0.1),
-            "gas_rate": gas_delta / max(elapsed, 0.1),
+            # Distinct samples can share a timestamp rounded to whole seconds.
+            # Their elapsed time is unknown; do not invent a 0.1-second interval.
+            "temp_rate": temp_delta / elapsed if elapsed > 0 else 0.0,
+            "gas_rate": gas_delta / elapsed if elapsed > 0 else 0.0,
             "temp_gas_product": values["temperature"] * values["gas"],
         }
         return features, missing

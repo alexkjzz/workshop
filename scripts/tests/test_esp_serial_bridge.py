@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from esp_serial_bridge import (  # noqa: E402
     BLOCK_END, BLOCK_START, LatestSampleBuffer, MqttForwarder, StatusBlockParser,
-    cli_arguments, select_serial_port, usb_candidates,
+    StatusStreamParser, cli_arguments, select_serial_port, serial_port_hint, usb_candidates,
 )
 
 
@@ -138,6 +138,49 @@ class BufferTests(unittest.TestCase):
         self.assertIsNone(buffer.peek(5))
 
 
+class StreamParserTests(unittest.TestCase):
+    def test_byte_fragments_and_serial_timeouts_preserve_a_complete_snapshot(self):
+        parser = StatusStreamParser()
+        wire = ("\r\n".join(block()) + "\r\n").encode()
+        results = []
+        for index, byte in enumerate(wire):
+            results.extend(parser.feed(bytes([byte]), now=index * .001))
+            self.assertEqual(parser.feed(b"", now=index * .001), [])
+        self.assertEqual(results, parse(block()))
+
+    def test_multiple_blocks_in_one_chunk_preserve_each_snapshot(self):
+        lines = block() + block(**{"Temperature": "76.8 C", "Humidite": "6.9 %"})
+        results = StatusStreamParser().feed(("\n".join(lines) + "\n").encode(), now=0)
+        self.assertEqual(results, parse(lines))
+        self.assertEqual(results[1]["temperature"], 76.8)
+        self.assertEqual(results[1]["humidity"], 6.9)
+
+    def test_partial_line_timeout_drops_frame_and_resynchronizes(self):
+        parser = StatusStreamParser(timeout=1)
+        prefix = (BLOCK_START + "\nTemperature : 2").encode()
+        self.assertEqual(parser.feed(prefix, now=0), [])
+        self.assertEqual(parser.feed(b"", now=1.01), [])
+        suffix = ("4.4 C\n" + "\n".join(block()[2:]) + "\n").encode()
+        self.assertEqual(parser.feed(suffix, now=1.02), [])
+        self.assertEqual(parser.feed(("\n".join(block()) + "\n").encode(), now=1.03), parse(block()))
+
+    def test_oversized_line_and_boot_bytes_do_not_contaminate_next_frame(self):
+        parser = StatusStreamParser()
+        prefix = (BLOCK_START + "\n").encode()
+        self.assertEqual(parser.feed(prefix + b"x" * 10000, now=0), [])
+        suffix = ("\n" + "\n".join(block()[1:]) + "\n").encode()
+        self.assertEqual(parser.feed(suffix, now=.1), [])
+        wire = b"\xff\xfe\x00\n" + ("\n".join(block()) + "\n").encode()
+        self.assertEqual(parser.feed(wire, now=.2), parse(block()))
+
+    def test_reconnect_reset_never_combines_two_sessions(self):
+        parser = StatusStreamParser()
+        self.assertEqual(parser.feed(("\n".join(block()[:5]) + "\n").encode(), now=0), [])
+        parser.reset()
+        self.assertEqual(parser.feed(("\n".join(block()[5:]) + "\n").encode(), now=.1), [])
+        self.assertEqual(parser.feed(("\n".join(block()) + "\n").encode(), now=.2), parse(block()))
+
+
 class FakeInfo:
     def __init__(self, rc=0):
         self.rc = rc
@@ -236,6 +279,16 @@ class PortAndCliTests(unittest.TestCase):
         self.assertEqual((args.baud, args.mqtt_host, args.mqtt_port, args.mqtt_topic),
                          (115200, "127.0.0.1", 1883, "esp8266/donnees"))
         self.assertEqual(args.max_messages, 3)
+
+    def test_diagnostic_explains_pinned_port_after_windows_renumbering(self):
+        ports = [port("COM6", "USB-SERIAL CH340", 0x1a86), port("COM4", "Bluetooth")]
+        hint = serial_port_hint(ports, "COM7")
+        self.assertIn("COM6", hint)
+        self.assertIn("COM7 absent", hint)
+        self.assertIn("Sans --port", hint)
+        # An explicitly selected device is never silently replaced by another.
+        self.assertEqual(select_serial_port(ports, "COM7"), "COM7")
+        self.assertNotIn("absent", serial_port_hint(ports, "com6"))
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ function publishTelemetry(t: number, log: boolean) {
 // Detections in the vision contract format (see infrastructure/messaging/messages.ts).
 function publishVision(t: number) {
   const faces = presenceAt(t) === null ? [] : [{ name: visitorAt(t), confidence: visitorAt(t) ? 0.91 : 0.64 }];
-  const detection = { ts: Math.floor(t), persons: faces.length, faces };
+  const detection = { ts: Math.floor(t), persons: faces.length, faces, source: 'simulation' };
   client.publish(VISION_TOPIC, JSON.stringify(detection), { qos: 1 });
 }
 

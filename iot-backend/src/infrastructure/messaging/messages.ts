@@ -92,7 +92,7 @@ function parseFace(value: unknown): Face | null {
 /**
  * Contract with the AI team's vision script, on MQTT_VISION_TOPIC:
  * {"ts":1791280000,"persons":1,"faces":[{"name":"Alice","confidence":0.92}]}
- * `name` is null for an unknown face; `ts` and `persons` are optional.
+ * `name` is null for an unknown face; `ts`, `persons` and `source` are optional.
  */
 export function parseVisionMessage(message: string, receivedAt: Date): VisionDetection | null {
   const input = parseObject(message);
@@ -106,5 +106,6 @@ export function parseVisionMessage(message: string, receivedAt: Date): VisionDet
 
   const detectedAt = parseTimestamp(input);
   if (detectedAt === null) return null;
-  return { detectedAt: detectedAt ?? receivedAt, persons, faces: faces as Face[] };
+  return { detectedAt: detectedAt ?? receivedAt, persons, faces: faces as Face[],
+    ...(input.source === 'live' || input.source === 'simulation' ? { source: input.source } : {}) };
 }

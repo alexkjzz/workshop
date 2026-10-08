@@ -42,3 +42,20 @@ export interface FaceLatest {
 }
 
 export interface FaceHistory { faces: FaceDetection[] }
+
+export interface FaceEnrollmentImage {
+  filename: string;
+  content_base64: string;
+}
+
+export interface FaceEnrollmentRequest {
+  name: string;
+  images: FaceEnrollmentImage[];
+}
+
+export interface FaceEnrollmentResult {
+  name: string;
+  added: number;
+  rejected: { filename: string; message: string }[];
+  catalog: FaceRecognitionResult;
+}

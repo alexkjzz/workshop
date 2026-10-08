@@ -4,11 +4,15 @@
 #include "sentinel_config.h"
 
 void Sentinel::begin(uint32_t nowMs) {
+  readings_ = Readings{};
+  status_ = DeviceStatus{};
   startTime_ = nowMs;
-  lastDHTRead_ = nowMs - DHT_INTERVAL_MS;
+  // Let the sensor settle before its first measurement, including after reset.
+  lastDHTRead_ = nowMs;
   lastGasRead_ = nowMs - GAS_INTERVAL_MS;
   lastDisplay_ = nowMs - DISPLAY_INTERVAL_MS;
   lastSerial_ = nowMs - SERIAL_INTERVAL_MS;
+  updateOutputs();
 
   Serial.println(F("Systeme initialise"));
 }
@@ -16,8 +20,9 @@ void Sentinel::begin(uint32_t nowMs) {
 void Sentinel::tick(uint32_t nowMs) {
   const uint32_t elapsed = nowMs - startTime_;
 
-  status_.pirReady = elapsed >= PIR_WARMUP_MS;
-  status_.gasReady = elapsed >= GAS_WARMUP_MS;
+  // Warmup happens once per begin(), even after millis() wraps (~49.7 days).
+  status_.pirReady = status_.pirReady || elapsed >= PIR_WARMUP_MS;
+  status_.gasReady = status_.gasReady || elapsed >= GAS_WARMUP_MS;
   status_.systemReady = status_.pirReady && status_.gasReady;
 
   updatePIR();

@@ -14,4 +14,6 @@ class BoardSensors : public Sensors {
 
  private:
   DHT dht_{PIN_DHT, DHT_TYPE};
+  bool climateSampled_ = false;
+  bool climateWasValid_ = false;
 };

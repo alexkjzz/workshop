@@ -47,16 +47,19 @@ Depuis la racine, avec le broker, le backend et le frontend demarres :
 
 ```powershell
 .\ai\.venv\Scripts\python.exe -m pip install -r .\scripts\requirements-esp.txt
-.\ai\.venv\Scripts\python.exe .\scripts\esp_serial_bridge.py --port COM7
+.\ai\.venv\Scripts\python.exe .\scripts\esp_serial_bridge.py
 ```
 
 Fermer `platformio device monitor` avant de lancer la passerelle : un seul
-programme peut ouvrir COM7. Le port peut changer apres rebranchement ; utiliser
-`--list-ports` pour le retrouver. Le dashboard affiche les quatre capteurs et
+programme peut ouvrir le port USB. Sans `--port`, la passerelle selectionne
+l'unique port USB plausible a chaque reconnexion. Si plusieurs cartes sont
+branchees, utiliser `--list-ports` puis `--port COMx`. Le dashboard affiche les quatre capteurs et
 un panneau **Etat du boitier ESP** (gaz/PIR, DHT, alarme et LEDs). La chauffe et
 la calibration ne sont pas interpretees comme des mesures valides.
 
 Installation complete, configuration et test : [docs/esp-serial.md](docs/esp-serial.md).
+Controle du DHT, qualite des mesures et validation de l'analyse :
+[validation capteurs et IA](docs/VALIDATION_CAPTEURS_IA.md).
 
 Dashboard React et API Express pour recevoir les mesures d'un ESP8266 via MQTT
 et envoyer des commandes LED. Les tests locaux peuvent se faire sans carte,
@@ -68,17 +71,34 @@ La webcam utilise **YOLO + ByteTrack** pour les personnes et le suivi, puis un
 module séparé **OpenCV YuNet + SFace** pour détecter et identifier les visages.
 Le navigateur utilise les routes Express authentifiées ; Express appelle FastAPI.
 Aucune nouvelle dépendance Python lourde : les modèles ONNX utilisent OpenCV déjà installé.
+Pillow, déjà fourni avec YOLO, figure explicitement dans `requirements-vision.txt`
+pour valider et normaliser les photos envoyées.
 
 Installation des modèles officiels (une fois, environ 39 Mo, SHA-256 vérifié),
 dans un terminal PowerShell ouvert à la racine du dépôt :
 
 ```powershell
 Set-Location .\ai
+.\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
 .\.venv\Scripts\python.exe -m app.vision.setup_faces
 ```
 
-Placer **3 à 5 photos par personne**, avec un seul visage suffisamment grand et
-net par photo, dans des sous-dossiers portant le nom de la personne :
+Dans **Caméra → Reconnaissance faciale → Ajouter une personne**, saisir le nom,
+sélectionner **1 à 5 photos** puis cliquer **Enregistrer la personne**. Utiliser
+des photos JPEG, PNG ou WebP avec un seul visage net et suffisamment grand :
+**3 à 5 photos par personne** sont recommandées. Limites : **5 Mio par photo**,
+**15 Mio par envoi**, **4096 pixels par côté** et **16 mégapixels**.
+
+Les photos passent uniquement par Express authentifié
+(`POST /api/ai/vision/faces/enroll`), puis FastAPI (`POST /vision/faces/enroll`).
+Le service ajoute les références à l'identité existante sans écraser ses photos
+et recharge automatiquement le catalogue. La caméra peut être arrêtée pendant
+l'ajout ; le modèle facial doit être disponible. Les refus sont expliqués photo
+par photo, même si une partie de l'envoi réussit ; les photos refusées restent
+sélectionnées pour correction. Les fichiers acceptés deviennent des JPEG nommés
+par UUID, avec orientation corrigée et métadonnées EXIF supprimées.
+
+L'ajout manuel reste possible dans des sous-dossiers portant le nom de la personne :
 
 ```text
 ai/known_faces/Mohamed/photo1.jpg
@@ -87,7 +107,7 @@ ai/known_faces/Mohamed/photo3.jpg
 ai/known_faces/Personne2/photo1.jpg
 ```
 
-Le catalogue est chargé au démarrage de Python. Après ajout/suppression de photos,
+Le catalogue est chargé au démarrage de Python. Après ajout manuel/suppression de photos,
 cliquer **Recharger les visages connus** dans la page Caméra. Aucun redémarrage
 n'est nécessaire pour recharger les références. Les images sans visage, trop
 petites, illisibles ou contenant plusieurs visages sont ignorées et journalisées.
@@ -106,6 +126,15 @@ FACE_MIN_SIZE_PIXELS=40
 FACE_DETECTOR_MODEL=models/face_detection_yunet_2023mar.onnx
 FACE_EMBEDDING_MODEL=models/face_recognition_sface_2021dec.onnx
 ```
+
+L'envoi de photos conserve `FACE_KNOWN_DIR` et n'ajoute aucune variable `.env`.
+Après mise à jour du code, relancer Python et Express s'ils exécutent encore
+l'ancienne version ; les ajouts suivants ne demandent aucun redémarrage.
+
+Après les builds frontend/backend, `node scripts/check-face-enrollment.mjs`
+vérifie le formulaire et le relais HTTP avec des photos synthétiques et un modèle
+facial factice, dans des processus et dossiers isolés. Ce test n'ouvre pas la
+webcam et n'évalue pas la précision biométrique.
 
 La confiance affichée est une similarité cosinus, pas une probabilité d'identité.
 Le seuil doit être évalué sur vos propres photos et conditions de caméra ; un
@@ -279,9 +308,11 @@ La reponse de `/api/status` doit contenir `mqttConnected: true`, un
 `lastMessageAt` renseigne et les valeurs dans `telemetry`. Chaque mesure est
 enregistree dans `iot-backend/data/telemetry.db` (SQLite) et conservee 7 jours
 (`READINGS_RETENTION_DAYS`). Les champs sont optionnels ; les mesures doivent
-etre des nombres finis et `presence` un booleen. Un champ `ts` (epoch en
-secondes) date la mesure : le firmware l'envoie pour les mesures rejouees apres
-une coupure.
+etre des nombres finis et `presence` un booleen. Le champ `ts` (epoch en
+secondes) est ajoute par la passerelle a la reception USB. Elle ne rejoue
+aucun historique apres une coupure. `/api/status` et les notifications
+decrivent les donnees physiques ; les simulations restent dans l'historique
+et le flux SSE pour la demonstration.
 
 ## Camera Et Reconnaissance Faciale
 
@@ -345,6 +376,7 @@ npm --prefix iot-frontend test
 npm --prefix iot-frontend run lint
 npm --prefix iot-frontend run build
 (cd firmware && pio run)
+python firmware/tests/run_native.py
 python -m unittest discover -s scripts/tests -v
 (cd ai && python -m pytest -q)
 python scripts/check-repository.py
@@ -352,8 +384,9 @@ python scripts/check-repository.py
 
 Les tests couvrent les regles du domaine, les cas d'usage (avec de faux
 adaptateurs), le parsing des messages MQTT, le depot SQLite et la passerelle USB ;
-ils ne necessitent ni broker ni carte. `pio run` compile le firmware USB actuel
-(sans cible de tests `native`). Les commandes de publication
+ils ne necessitent ni broker ni carte. Le runner C++ utilise g++, clang++ ou Zig
+pour tester le firmware avec des doubles materiels ; `pio run` compile pour
+l'ESP8266 sans flasher la carte. Les commandes de publication
 et d'abonnement ci-dessus servent aux tests manuels d'integration.
 
 ## Notifications Par E-mail

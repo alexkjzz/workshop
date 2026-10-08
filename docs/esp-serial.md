@@ -28,12 +28,15 @@ Windows, si la commande n'est pas dans le PATH :
 ```
 
 ```powershell
-.\ai\.venv\Scripts\python.exe scripts\esp_serial_bridge.py --port COM7
+.\ai\.venv\Scripts\python.exe scripts\esp_serial_bridge.py
 ```
 
-Adapter `COM7` au résultat de `--list-ports`. Sans `--port`, la sélection est
+Pour imposer un port, ajouter `--port COMx` avec le résultat de `--list-ports`.
+Sans `--port`, la sélection est
 automatique seulement lorsqu'un seul port USB plausible existe ; les ports
-Bluetooth sont exclus. Le débit par défaut est **115200 bauds**.
+Bluetooth sont exclus. Elle est refaite après une déconnexion, même si Windows
+change le numéro COM. Un port imposé n'est jamais remplacé silencieusement par
+une autre carte. Le débit par défaut est **115200 bauds**.
 
 La configuration par défaut est `127.0.0.1:1883`, topic `esp8266/donnees`,
 identifiant `sentinel-x-01`. Si le backend utilise d'autres valeurs :
@@ -56,6 +59,10 @@ Seuls les blocs complets `========= SENTINEL-X =========` ...
 `==============================` sont acceptés. Les valeurs malformées,
 doublons, blocs tronqués ou dépassant trois secondes sont ignorés. Les logs
 de démarrage et de mouvement hors blocs sont ignorés.
+Les lignes USB fragmentées par les délais de lecture sont réassemblées ; une
+ligne reste limitée à 256 octets et trois secondes. Un port ouvert sans bloc
+valide pendant dix secondes produit un avertissement, puis au plus un toutes
+les trente secondes. Une connexion MQTT seule ne prouve pas la réception USB.
 
 Exemple après préchauffage :
 
@@ -163,4 +170,6 @@ ne nécessitent aucun matériel ni broker :
 - Documentation : `README.md`, `ai/README.md`, `docs/esp-serial.md`.
 
 Aucune nouvelle variable `.env` obligatoire : la passerelle utilise les options
-CLI listees ci-dessus. Le firmware actuel n'a pas ete modifie.
+CLI listees ci-dessus. La configuration materielle canonique se trouve dans
+`firmware/include/sentinel_config.h` ; voir [le guide firmware](../firmware/README.md)
+et [la validation capteurs/IA](VALIDATION_CAPTEURS_IA.md) avant de changer le type DHT.

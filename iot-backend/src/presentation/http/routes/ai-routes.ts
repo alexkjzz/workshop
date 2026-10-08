@@ -1,5 +1,18 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import type { AiCoordinator } from '../../../application/ai-coordinator.js';
+import { FaceEnrollmentError } from '../../../application/errors.js';
+import { validateFaceEnrollment } from '../../../application/face-enrollment.js';
+
+export function enrollFacesHandler(ai: AiCoordinator): RequestHandler {
+  return async (request, response) => {
+    try {
+      response.json(await ai.enrollFaces(validateFaceEnrollment(request.body)));
+    } catch (error) {
+      response.status(error instanceof FaceEnrollmentError ? error.statusCode : 503)
+        .json({ message: error instanceof Error ? error.message : 'Impossible d’ajouter les photos.' });
+    }
+  };
+}
 
 export function aiRoutes(ai: AiCoordinator) {
   const router = Router();

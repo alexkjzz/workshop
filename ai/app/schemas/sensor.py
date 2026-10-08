@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+
+
+FUTURE_TOLERANCE_SECONDS = 5
+SENSOR_RANGES = {"temperature": (-40, 80), "humidity": (0, 100), "gas": (0, 1023)}
 
 
 def utc_now() -> datetime:
@@ -17,6 +21,22 @@ class SensorSample(BaseModel):
     timestamp: datetime = Field(default_factory=utc_now)
     sample_id: int | None = None
     source: Literal["live", "simulation"] = "live"
+    _invalid_fields: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def retain_valid_channels(self):
+        # An invalid DHT channel must not erase a valid PIR/gas observation.
+        # These are sensor limits, not an assumed indoor operating temperature.
+        for name, (minimum, maximum) in SENSOR_RANGES.items():
+            value = getattr(self, name)
+            if value is not None and not minimum <= value <= maximum:
+                self._invalid_fields[name] = f"{name} outside [{minimum}, {maximum}]"
+                setattr(self, name, None)
+        return self
+
+    @property
+    def quality_issues(self) -> list[str]:
+        return list(self._invalid_fields.values())
 
     @field_validator("timestamp")
     @classmethod

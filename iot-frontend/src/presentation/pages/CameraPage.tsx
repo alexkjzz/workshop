@@ -49,60 +49,70 @@ export function CameraPage({ detections, aiPredictions, aiStatus, refreshAi, onS
   const personHistory = personDetectionHistory(aiPredictions).slice(0, TABLE_ROWS);
 
   return (
-    <main className="camera">
-      <section aria-labelledby="camera-title">
-        <div className="section-heading">
-          <h2 id="camera-title">Caméra</h2>
-          <span>Webcam du serveur local</span>
-        </div>
-        <VisionCamera status={aiStatus} onSessionExpired={onSessionExpired} onRefresh={refreshAi} />
-        {currentVision && (
-          <p className="camera-ai-summary" role="status">
-            YOLO : {personsLabel(currentVision.person_count)} · {Math.round(currentVision.max_confidence * 100)} %
-            {currentVision.person_detected ? currentVision.confirmed ? ' · présence confirmée' : ' · confirmation en cours' : ''}
-            {' · '}{currentVision.fps.toFixed(1)} FPS · {currentVision.inference_time_ms.toFixed(1)} ms
-          </p>
-        )}
-        {aiStatus?.vision?.error && <p className="camera-ai-error">{aiStatus.vision.error}</p>}
-      </section>
+    <main className="camera" aria-labelledby="camera-page-title">
+      <header className="page-intro">
+        <p className="page-eyebrow">Surveillance visuelle</p>
+        <h1 id="camera-page-title">Caméra</h1>
+        <p>Suivez le flux vidéo, les personnes détectées et les reconnaissances faciales.</p>
+      </header>
+      <div className="camera-layout">
+        <div className="camera-primary">
+          <section className="camera-monitor" aria-labelledby="camera-title">
+            <div className="section-heading">
+              <h2 id="camera-title">Flux vidéo</h2>
+              <span>Webcam du serveur local</span>
+            </div>
+            <VisionCamera status={aiStatus} onSessionExpired={onSessionExpired} onRefresh={refreshAi} />
+            {currentVision && (
+              <p className="camera-ai-summary" role="status">
+                YOLO : {personsLabel(currentVision.person_count)} · {Math.round(currentVision.max_confidence * 100)} %
+                {currentVision.person_detected ? currentVision.confirmed ? ' · présence confirmée' : ' · confirmation en cours' : ''}
+                {' · '}{currentVision.fps.toFixed(1)} FPS · {currentVision.inference_time_ms.toFixed(1)} ms
+              </p>
+            )}
+            {aiStatus?.vision?.error && <p className="camera-ai-error">{aiStatus.vision.error}</p>}
+          </section>
 
-      <section className="detection person-detection" aria-labelledby="person-detection-title">
-        <div className="section-heading">
-          <h2 id="person-detection-title">Détection de personnes</h2>
-          <span>YOLO · webcam du serveur</span>
+          <section className="detection person-detection" aria-labelledby="person-detection-title">
+            <div className="section-heading">
+              <h2 id="person-detection-title">Détection de personnes</h2>
+              <span>YOLO · webcam du serveur</span>
+            </div>
+            <p className={`detection-current person-detection-current${currentVision?.confirmed ? ' detection-current--alert' : ''}`} role="status">
+              {personDetectionLabel(aiStatus, now)}
+            </p>
+            <h3 className="camera-history-heading">Historique des analyses</h3>
+            <div className="history">
+              <table>
+                <caption className="visually-hidden">Historique des analyses YOLO</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Heure</th>
+                    <th scope="col">Personnes</th>
+                    <th scope="col">Confiance</th>
+                    <th scope="col">Confirmation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personHistory.map((vision) => (
+                    <tr key={vision.last_prediction_time}>
+                      <td>{timeFormat.format(Date.parse(vision.last_prediction_time!))}</td>
+                      <td>{vision.person_count}</td>
+                      <td>{vision.person_count > 0 ? `${Math.round(vision.max_confidence * 100)} %` : '—'}</td>
+                      <td>{vision.person_count === 0 ? 'Aucune présence' : vision.confirmed ? 'Confirmée' : 'En cours'}</td>
+                    </tr>
+                  ))}
+                  {personHistory.length === 0 && (
+                    <tr><td colSpan={4}>Aucune analyse de personnes reçue.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
-        <p className={`detection-current person-detection-current${currentVision?.confirmed ? ' detection-current--alert' : ''}`} role="status">
-          {personDetectionLabel(aiStatus, now)}
-        </p>
-        <div className="history">
-          <table>
-            <caption className="visually-hidden">Historique des analyses YOLO</caption>
-            <thead>
-              <tr>
-                <th scope="col">Heure</th>
-                <th scope="col">Personnes</th>
-                <th scope="col">Confiance</th>
-                <th scope="col">Confirmation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {personHistory.map((vision) => (
-                <tr key={vision.last_prediction_time}>
-                  <td>{timeFormat.format(Date.parse(vision.last_prediction_time!))}</td>
-                  <td>{vision.person_count}</td>
-                  <td>{vision.person_count > 0 ? `${Math.round(vision.max_confidence * 100)} %` : '—'}</td>
-                  <td>{vision.person_count === 0 ? 'Aucune présence' : vision.confirmed ? 'Confirmée' : 'En cours'}</td>
-                </tr>
-              ))}
-              {personHistory.length === 0 && (
-                <tr><td colSpan={4}>Aucune analyse de personnes reçue.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
-      <FaceRecognitionPanel status={aiStatus} now={now} onRefresh={refreshAi} onSessionExpired={onSessionExpired} />
+        <FaceRecognitionPanel status={aiStatus} now={now} onRefresh={refreshAi} onSessionExpired={onSessionExpired} />
+      </div>
 
       {latest && <section className="detection external-facial-detection" aria-labelledby="detection-title">
         <div className="section-heading">

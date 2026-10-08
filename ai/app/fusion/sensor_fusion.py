@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ..schemas.prediction import AnomalyResult
-from ..schemas.sensor import SensorSample
+from ..schemas.sensor import FUTURE_TOLERANCE_SECONDS, SensorSample
 from ..schemas.vision import VisionResult
 
 logger = logging.getLogger("FUSION")
@@ -24,11 +24,12 @@ class FusedEvidence:
 def fuse(sample: SensorSample | None, anomaly: AnomalyResult, vision: VisionResult,
          now: datetime, sensor_stale_seconds: float = 30, vision_stale_seconds: float = 5) -> FusedEvidence:
     evidence = FusedEvidence()
+    simulation = sample is not None and sample.source == "simulation"
     sensor_age = (now - sample.timestamp).total_seconds() if sample else float("inf")
-    sensor_fresh = -5 <= sensor_age <= sensor_stale_seconds
+    sensor_fresh = -FUTURE_TOLERANCE_SECONDS <= sensor_age <= sensor_stale_seconds
     vision_age = (now - (vision.last_prediction_time or vision.timestamp)).total_seconds()
-    vision_fresh = (vision.status == "running" and vision.detection_status in (None, "running")
-                    and -5 <= vision_age <= vision_stale_seconds)
+    vision_fresh = (not simulation and vision.status == "running" and vision.detection_status in (None, "running")
+                    and -FUTURE_TOLERANCE_SECONDS <= vision_age <= vision_stale_seconds)
     pir = sensor_fresh and sample is not None and sample.presence is True
     person = vision_fresh and vision.confirmed and vision.person_detected
     if sensor_fresh and anomaly.status == "ready":
@@ -45,7 +46,8 @@ def fuse(sample: SensorSample | None, anomaly: AnomalyResult, vision: VisionResu
     elif pir:
         evidence.intrusion_score = 35
         evidence.confidence = 0.35
-        evidence.reasons.append("PIR movement without camera confirmation")
+        evidence.reasons.append("Simulated PIR movement; no physical camera correlation" if simulation
+                                else "PIR movement without camera confirmation")
 
     if sensor_fresh and anomaly.status == "ready" and anomaly.is_anomaly:
         features = anomaly.features
@@ -69,7 +71,11 @@ def fuse(sample: SensorSample | None, anomaly: AnomalyResult, vision: VisionResu
         unavailable.append(anomaly.reason)
     elif anomaly.missing_fields:
         unavailable.append("Missing sensor fields: " + ", ".join(anomaly.missing_fields))
-    if not vision_fresh:
+    if sensor_fresh and sample is not None and sample.quality_issues:
+        unavailable.append("Ignored invalid sensor fields: " + ", ".join(sample.quality_issues))
+    if simulation:
+        unavailable.append("Simulation: real camera evidence excluded")
+    elif not vision_fresh:
         unavailable.append("Vision unavailable or stale")
     evidence.degraded = bool(unavailable)
     evidence.reasons += unavailable

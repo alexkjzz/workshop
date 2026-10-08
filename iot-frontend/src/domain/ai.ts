@@ -77,6 +77,16 @@ export interface AiStatus {
 
 export const AI_HISTORY_SIZE = 50;
 const CURRENT_VISION_MS = 5000;
+const CURRENT_SENSOR_MS = 30_000;
+
+// Keep the history complete while a demo cannot displace recent physical data.
+export function currentAiPrediction(predictions: AiPrediction[], now: number): AiPrediction | undefined {
+  return predictions.find((prediction) => {
+    if (prediction.source !== 'live') return false;
+    const age = now - Date.parse(prediction.sensor_timestamp ?? prediction.timestamp);
+    return Number.isFinite(age) && age >= -5000 && age <= CURRENT_SENSOR_MS;
+  }) ?? predictions[0];
+}
 
 export function currentAiVision(vision: AiVisionResult | null | undefined, now: number): AiVisionResult | null {
   if (!vision || vision.status !== 'running' || !vision.last_prediction_time

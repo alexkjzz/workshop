@@ -98,3 +98,12 @@ test('rejects malformed vision detections', () => {
   assert.equal(parseVisionMessage('{"faces":[{"name":42,"confidence":0.5}]}', receivedAt), null);
   assert.equal(parseVisionMessage('{"persons":1}', receivedAt), null);
 });
+
+test('vision messages preserve simulation provenance so the demo cannot send real alerts', () => {
+  const detection = { ts: receivedAt.getTime() / 1000, persons: 1,
+    faces: [{ name: null, confidence: 0.64 }] };
+  assert.deepEqual(parseVisionMessage(JSON.stringify({ ...detection, source: 'simulation' }), receivedAt), {
+    detectedAt: receivedAt, persons: 1, faces: detection.faces, source: 'simulation',
+  });
+  assert.equal(parseVisionMessage(JSON.stringify({ ...detection, source: 'live' }), receivedAt)?.source, 'live');
+});

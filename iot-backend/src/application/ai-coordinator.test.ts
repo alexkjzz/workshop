@@ -23,6 +23,24 @@ test('reference reload cannot be undone by an older in-flight AI status', async 
   assert.ok(published.some((event) => event.type === 'ai-status' && event.status.vision?.faces?.known_identities === 1));
 });
 
+test('enrollment publishes its catalog and an older facial status cannot undo it', async () => {
+  const { ai, gateway, published } = setup(async () => aiPrediction());
+  await ai.refresh();
+  let resolveFaces!: (faces: ReturnType<typeof faceResult>) => void;
+  gateway.facesStatus = () => new Promise((resolve) => { resolveFaces = resolve; });
+  const waiting = ai.getFacesStatus();
+  const catalog = { ...faceResult(), catalog_revision: 2, timestamp: '2026-10-06T10:00:01.000Z' };
+  gateway.enrollFaces = async (request) => ({ name: request.name, added: 0,
+    rejected: [{ filename: request.images[0].filename, message: 'Aucun visage détecté.' }], catalog });
+  const result = await ai.enrollFaces({ name: 'Mohamed', images: [{ filename: 'photo.jpg', content_base64: 'Zg==' }] });
+  resolveFaces(faceResult());
+  await waiting;
+  assert.equal(result.added, 0);
+  assert.equal(result.rejected[0].filename, 'photo.jpg');
+  assert.equal(ai.getStatus().vision?.faces?.catalog_revision, 2);
+  assert.ok(published.some((event) => event.type === 'ai-status' && event.status.vision?.faces?.catalog_revision === 2));
+});
+
 function setup(analyze: AiGateway['analyze'], limit = 32) {
   const published: LiveEvent[] = [];
   const stored: StoredAiPrediction[] = [];
@@ -36,8 +54,10 @@ function setup(analyze: AiGateway['analyze'], limit = 32) {
     controlVision: async () => aiPrediction().vision,
   };
   const events = { publish: (event: LiveEvent) => published.push(event), subscribe: () => () => {} };
-  const ai = new AiCoordinator(gateway, repository, events, { now: () => now }, limit);
-  return { ai, gateway, stored, published };
+  let currentTime = now;
+  const clock = { now: () => currentTime, advance: (ms: number) => { currentTime = new Date(+currentTime + ms); } };
+  const ai = new AiCoordinator(gateway, repository, events, clock, limit);
+  return { ai, gateway, stored, published, repository, events, clock };
 }
 
 async function idle(ai: AiCoordinator) {
@@ -106,6 +126,122 @@ test('simulation source survives inference transport', async () => {
   await idle(ai);
   assert.equal(received?.source, 'simulation');
   assert.equal(ai.getLatest()?.source, 'simulation');
+});
+
+test('sensor ordering is independent for live data and simulation', async () => {
+  const calls: AiSensorSample[] = [];
+  const { ai, stored } = setup(async (sample) => {
+    calls.push(sample);
+    return { ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source };
+  });
+  ai.enqueue({ id: 1, recordedAt: new Date(+now + 1_000), gas: 130, source: 'simulation' });
+  ai.enqueue({ id: 2, recordedAt: now, gas: 38, source: 'live' });
+  ai.enqueue({ id: 3, recordedAt: new Date(+now - 1_000), gas: 131, source: 'simulation' });
+  ai.enqueue({ id: 4, recordedAt: new Date(+now - 1_000), gas: 39, source: 'live' });
+  await idle(ai);
+  assert.deepEqual(calls.map((sample) => [sample.sample_id, sample.source]), [[1, 'simulation'], [2, 'live']]);
+  assert.equal(stored.length, 2);
+  assert.equal(ai.getLatest()?.sample_id, 2);
+  assert.equal(ai.getLatest()?.source, 'live');
+});
+
+test('future samples beyond five seconds cannot poison either source order', async () => {
+  const calls: number[] = [];
+  const { ai } = setup(async (sample) => {
+    calls.push(sample.sample_id);
+    return { ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source };
+  });
+  ai.enqueue({ id: 10, recordedAt: new Date(+now + 5_001), gas: 900, source: 'live' });
+  ai.enqueue({ id: 11, recordedAt: new Date(+now + 5_001), gas: 901, source: 'simulation' });
+  ai.enqueue({ id: 1, recordedAt: now, gas: 38, source: 'live' });
+  ai.enqueue({ id: 2, recordedAt: new Date(+now + 5_000), gas: 120, source: 'simulation' });
+  ai.enqueue({ id: 12, recordedAt: new Date(NaN), gas: 902, source: 'live' });
+  await idle(ai);
+  assert.deepEqual(calls, [1, 2]);
+  assert.equal(ai.getLatest()?.sample_id, 1);
+});
+
+test('simulation predictions preserve the canonical real-camera and facial status', async () => {
+  const { ai, gateway } = setup(async (sample) => ({ ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source }));
+  const vision = { ...aiPrediction().vision, status: 'running' as const, stream_ready: true,
+    person_detected: true, person_count: 1, faces: faceResult() };
+  gateway.status = async () => ({ status: 'online', model_loaded: true, vision, latest_prediction: null });
+  await ai.refresh();
+  ai.enqueue({ id: 1, recordedAt: now, presence: true, source: 'simulation' });
+  await idle(ai);
+  assert.deepEqual(ai.getStatus().vision, vision);
+  assert.equal(ai.getLatest()?.source, 'simulation');
+  assert.equal(ai.getLatest()?.vision.status, 'stopped');
+});
+
+test('simulation cannot initialize a fabricated camera state before health polling', async () => {
+  const { ai, gateway } = setup(async (sample) => ({ ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source }));
+  ai.enqueue({ id: 1, recordedAt: now, gas: 120, source: 'simulation' });
+  await idle(ai);
+  assert.equal(ai.getStatus().online, true);
+  assert.equal(ai.getStatus().vision, null);
+  const vision = { ...aiPrediction().vision, status: 'running' as const, stream_ready: true };
+  gateway.status = async () => ({ status: 'online', model_loaded: true, vision, latest_prediction: null });
+  await ai.refresh();
+  assert.deepEqual(ai.getStatus().vision, vision);
+});
+
+test('fresh live results stay primary while simulations remain in history and SSE without duplicate polling', async () => {
+  const { ai, gateway, stored, published } = setup(async (sample) => ({
+    ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source,
+  }));
+  ai.enqueue({ id: 1, recordedAt: now, gas: 38, source: 'live' });
+  ai.enqueue({ id: 2, recordedAt: new Date(+now + 1_000), gas: 120, source: 'simulation' });
+  ai.enqueue({ id: 3, recordedAt: new Date(+now + 2_000), gas: 121, source: 'simulation' });
+  await idle(ai);
+  assert.equal(ai.getLatest()?.source, 'live');
+  assert.equal(ai.getLatest()?.sample_id, 1);
+  assert.equal(stored.length, 3);
+  assert.deepEqual(published.filter((event) => event.type === 'ai').map((event) => event.prediction.source),
+    ['live', 'simulation', 'simulation']);
+  gateway.status = async () => ({ status: 'online', model_loaded: true,
+    vision: aiPrediction().vision, latest_prediction: stored[1] });
+  await ai.refresh();
+  await ai.refresh();
+  assert.equal(stored.length, 3);
+  assert.equal(published.filter((event) => event.type === 'ai').length, 3);
+  assert.equal(ai.getLatest()?.sample_id, 1);
+});
+
+test('live priority expires using the sensor timestamp despite more recent camera predictions', async () => {
+  const { ai, gateway, clock } = setup(async (sample) => ({
+    ...aiPrediction(sample.sample_id, new Date(Date.parse(sample.timestamp) + 1).toISOString()),
+    sensor_timestamp: sample.timestamp, source: sample.source,
+  }));
+  ai.enqueue({ id: 1, recordedAt: now, gas: 38, source: 'live' });
+  await idle(ai);
+  clock.advance(20_000);
+  const cameraUpdate = { ...aiPrediction(1, clock.now().toISOString()), sensor_timestamp: now.toISOString() };
+  gateway.status = async () => ({ status: 'online', model_loaded: true,
+    vision: cameraUpdate.vision, latest_prediction: cameraUpdate });
+  await ai.refresh();
+  ai.enqueue({ id: 2, recordedAt: clock.now(), gas: 120, source: 'simulation' });
+  await idle(ai);
+  assert.equal(ai.getLatest()?.source, 'live');
+  clock.advance(10_001);
+  assert.equal(ai.getLatest()?.source, 'simulation');
+  assert.equal(ai.getLatest()?.sample_id, 2);
+});
+
+test('restoring history preserves fresh live priority even when a simulation was recorded last', async () => {
+  const { ai, gateway, repository, events, clock, stored } = setup(async (sample) => ({
+    ...aiPrediction(sample.sample_id, sample.timestamp), source: sample.source,
+  }));
+  ai.enqueue({ id: 1, recordedAt: now, gas: 38, source: 'live' });
+  ai.enqueue({ id: 2, recordedAt: new Date(+now + 1_000), gas: 120, source: 'simulation' });
+  await idle(ai);
+  const restored = new AiCoordinator(gateway, repository, events, clock);
+  assert.equal(restored.getLatest()?.sample_id, 1);
+  gateway.status = async () => ({ status: 'online', model_loaded: true,
+    vision: aiPrediction().vision, latest_prediction: stored[0] });
+  await restored.refresh();
+  assert.equal(stored.length, 2);
+  assert.equal(restored.getLatest()?.sample_id, 1);
 });
 
 test('forwards only the four sensor features while keeping device flags out of the AI contract', async () => {

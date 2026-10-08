@@ -8,13 +8,12 @@ void GpioActuators::begin() {
   digitalWrite(PIN_LED_WARNING, ORANGE_LED_OFF);
   pinMode(PIN_LED_WARNING, OUTPUT);
 
-  pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_LED_STATUS, OUTPUT);
-  pinMode(PIN_LED_ALERT, OUTPUT);
-
   digitalWrite(PIN_BUZZER, BUZZER_OFF);
   digitalWrite(PIN_LED_STATUS, GREEN_LED_OFF);
   digitalWrite(PIN_LED_ALERT, RED_LED_OFF);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_LED_STATUS, OUTPUT);
+  pinMode(PIN_LED_ALERT, OUTPUT);
 }
 
 void GpioActuators::apply(const ActuatorOutputs &outputs) {

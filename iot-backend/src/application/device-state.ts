@@ -10,6 +10,8 @@ export class DeviceState {
   private detections: VisionDetection[] = [];
 
   applyReading(reading: Reading) {
+    // Demonstrations remain in history/SSE/AI, but cannot impersonate the physical box.
+    if (reading.source === 'simulation') return;
     // A reading replayed after a disconnection does not replace a newer one.
     if (this.lastMessageAt && reading.recordedAt < this.lastMessageAt) return;
     const { id: _id, recordedAt, source: _source, ...telemetry } = reading;

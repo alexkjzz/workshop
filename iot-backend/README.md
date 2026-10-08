@@ -76,13 +76,13 @@ Better Auth is mounted on `/api/auth/*`. Every other route except
 
 | Route | Description |
 | --- | --- |
-| `GET /api/status` | MQTT connection state, latest reading and its time |
+| `GET /api/status` | MQTT connection state, latest physical-device reading and its time |
 | `GET /api/readings?limit=N` | sensor history, newest first (`1 <= N <= 500`) |
 | `GET /api/vision` | recent vision detections, newest first |
 | `GET /api/stream` | Server-Sent Events: `reading` and `vision` events |
 | `GET /api/camera/stream` | MJPEG stream relayed from `VISION_STREAM_URL` |
 | `GET /api/ai/status` | AI connectivity, model/camera availability, queue and dropped sample count |
-| `GET /api/ai/latest` | latest persisted AI prediction, or `null` before the first result |
+| `GET /api/ai/latest` | fresh live prediction first, otherwise the newest result; `null` before the first result |
 | `GET /api/ai/history?limit=N` | persisted AI history, newest first (`1 <= N <= 500`) |
 | `POST /api/ai/vision/start` | starts the server PC webcam through the Python service |
 | `POST /api/ai/vision/stop` | stops the Python webcam worker |
@@ -90,14 +90,30 @@ Better Auth is mounted on `/api/auth/*`. Every other route except
 | `GET /api/ai/vision/faces/latest` | current recognized/unknown faces and their inference time |
 | `GET /api/ai/vision/faces/history` | up to 20 recent face events kept in Python memory |
 | `POST /api/ai/vision/faces/reload` | atomically reloads local reference photos without restarting Python |
+| `POST /api/ai/vision/faces/enroll` | adds reference photos for a named identity and reloads the facial catalog |
 | `POST /api/action` | `{"ordre":"ON"}` or `{"ordre":"OFF"}`, published to the box |
 | `GET /api/settings/notifications` | e-mail notification settings and whether mail is configured |
 | `PUT /api/settings/notifications` | `{"email":"...","enabled":true,"alerts":{"intrusion":true,"unknown-face":true,"device-offline":true}}` |
 | `POST /api/settings/notifications/test` | sends a test e-mail (at most every 30 s) |
 
+Face enrollment accepts JSON `{ "name": "Mohamed", "images": [{ "filename": "photo.jpg", "content_base64": "..." }] }`.
+Use canonical padded base64 without a data URL. The limits are 5 photos, 5 MiB
+decoded per photo, and 15 MiB decoded overall. Only this endpoint accepts a
+21 MiB JSON body, after session authentication; other JSON routes retain their
+16 KiB limit. Names are trimmed and normalized to Unicode NFC, up to 64
+characters, with letters, numbers, spaces, `_`, `-` and `'`. Path separators,
+dots, Windows device names, `Unknown` and `Inconnu` are rejected. Filenames are
+display metadata; Python validates JPEG/PNG/WEBP content and saves normalized
+photos under generated names. The response is `{ name, added, rejected:
+[{ filename, message }], catalog }`, including when all photos are rejected.
+Validation/size/model errors return HTTP 400/413/422/503 with `{ message }`.
+The browser uses Express; the FastAPI URL and service token stay on the server.
+
 Alerts (intrusion, unknown face, box offline for 30 s) are e-mailed to the
-configured address, at most once every 5 minutes per type. Readings replayed
-after an outage raise no alert.
+configured address, at most once every 5 minutes per type. Sensor observations
+older than the last accepted PIR state, older than 60 seconds, or more than
+5 seconds in the future raise no intrusion alert. Simulator telemetry and vision
+messages carry `source: "simulation"` and never trigger real notifications.
 
 Telemetry fields are optional. Temperature, humidity, and gas values must be
 finite numbers; presence is normalized from a boolean or `0`/`1`. An optional `ts` (epoch seconds)
@@ -133,6 +149,14 @@ settings and Better Auth continue to use their existing paths.
 
 Sensor history now also persists `source: "live" | "simulation"`. Normal device
 ingestion defaults to `live`; demo publishers explicitly send `simulation`.
+Simulated readings remain available in history, SSE charts and AI demonstration
+results. They do not replace `/api/status` or reset the physical-device heartbeat;
+without a physical sample, the ESP status stays unavailable.
+AI sample order is checked separately for live data and simulations, with a
+5-second future clock tolerance. `/api/ai/latest` gives live sensor results
+priority for 30 seconds, using `sensor_timestamp` rather than camera refresh
+time. Simulations remain in AI history and SSE, and their isolated vision result
+cannot overwrite the canonical webcam/facial status returned by Python polling.
 The schema migration leaves older rows without a source (`NULL`), because their
 provenance cannot be inferred. Training exports can therefore select only
 `source = 'live'` and keep simulations and unknown legacy data out of the model.

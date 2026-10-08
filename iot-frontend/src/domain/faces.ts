@@ -43,6 +43,13 @@ export interface FaceLatest {
   status: FaceStatus;
 }
 
+export interface FaceEnrollmentResponse {
+  name: string;
+  added: number;
+  rejected: Array<{ filename: string; message: string }>;
+  catalog: FaceRecognitionResult;
+}
+
 export function currentFaces(result: FaceRecognitionResult | null | undefined, now: number): FaceDetection[] | null {
   if (result?.status !== 'running' || !result.last_prediction_time) return null;
   const age = now - Date.parse(result.last_prediction_time);

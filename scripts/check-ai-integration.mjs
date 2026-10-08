@@ -113,8 +113,8 @@ function firmwareMeasurement(overrides = {}) {
   // MQTT contract of the USB bridge; unavailable climate fields are omitted.
   // Fixtures remain confined to this isolated SQLite database and HTTP server.
   const message = JSON.stringify({
-    device: 'sentinel-x-integration', ts: Math.floor(Date.now() / 1000),
-    gas: 123, presence: false, source: 'simulation',
+    device: 'sentinel-x-integration', ts: Date.now() / 1000,
+    gas: 123, presence: false, source: 'live',
     climateValid: false, gasReady: true, pirReady: true, gasAlert: false,
     alarmActive: false, ledRed: false, ledOrange: true, ledGreen: false, ...overrides,
   });
@@ -197,9 +197,9 @@ try {
   assert.equal(prediction.anomaly.is_anomaly, null);
   assert.equal(prediction.anomaly.anomaly_score, null);
   assert.equal(prediction.risk.degraded, true);
-  assert.equal(prediction.source, 'simulation');
-  assert.equal(first.source, 'simulation');
-  assert.equal(sensorRepository.findRecent(1)[0].source, 'simulation');
+  assert.equal(prediction.source, 'live');
+  assert.equal(first.source, 'live');
+  assert.equal(sensorRepository.findRecent(1)[0].source, 'live');
   assert.equal(sensorRepository.findRecent(1)[0].climateValid, false);
   assert.equal(sensorRepository.findRecent(1)[0].ledOrange, true);
   const status = await (await fetch(`${backendUrl}/api/status`, authenticated)).json();
@@ -217,6 +217,25 @@ try {
     'authenticated AI SSE event');
   assert.equal((await (await fetch(`${backendUrl}/api/ai/latest`, authenticated)).json()).id, prediction.id);
   console.log('PASS partial firmware reading -> untrained analysis -> shared SQLite -> authenticated SSE/REST.');
+
+  const simulated = record.execute(firmwareMeasurement({ source: 'simulation', gas: 900,
+    presence: true, alarmActive: true, ledRed: true, ledOrange: false }));
+  await until(() => coordinator.getStatus().queue_depth === 0
+    && coordinator.getHistory(50).some((entry) => entry.sample_id === simulated.id),
+  'separate simulated analysis in history');
+  const simulatedAnalysis = coordinator.getHistory(50).find((entry) => entry.sample_id === simulated.id);
+  assert.equal(simulatedAnalysis.source, 'simulation');
+  assert.equal(simulatedAnalysis.vision.status, 'stopped');
+  assert.equal(simulatedAnalysis.risk.degraded, true);
+  assert.equal(coordinator.getLatest().sample_id, first.id, 'Simulation must not displace a fresh physical analysis.');
+  const physicalStatus = await (await fetch(`${backendUrl}/api/status`, authenticated)).json();
+  assert.equal(physicalStatus.telemetry.gas, 123);
+  assert.equal(physicalStatus.telemetry.alarmActive, false);
+  assert.equal(physicalStatus.telemetry.ledOrange, true);
+  await until(() => streamed.some((event) => event.type === 'ai'
+    && event.payload.sample_id === simulated.id && event.payload.source === 'simulation'),
+  'explicitly tagged simulation remains available in authenticated SSE');
+  console.log('PASS simulation remains in history/SSE without replacing physical state or current live analysis.');
 
   const historyCount = coordinator.getHistory(50).length;
   await coordinator.refresh();
@@ -251,7 +270,7 @@ try {
   assert.equal(coordinator.getLatest().source, 'live');
   assert.equal(coordinator.getLatest().anomaly.status, 'untrained');
   assert.equal(sensorRepository.findRecent(1)[0].source, 'live');
-  assert.deepEqual(sensorRepository.findRecent(3).map(({ source }) => source), ['live', 'simulation', 'simulation']);
+  assert.deepEqual(sensorRepository.findRecent(4).map(({ source }) => source), ['live', 'live', 'simulation', 'live']);
   assert.equal('source' in state.latest().telemetry, false, 'Provenance must not change sensor state shape.');
   await until(() => streamed.some((event) => event.type === 'ai' && event.payload.sample_id === recovered.id), 'recovered AI SSE');
   console.log('PASS restart recovery and separate persisted live/simulation provenance.');

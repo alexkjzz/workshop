@@ -1,4 +1,5 @@
 opencv-python>=4.10,<5
+pillow>=10.4,<13
 # YuNet/SFace use these existing OpenCV bindings; no dlib/InsightFace dependency.
 # Fetch the two verified ONNX models explicitly: python -m app.vision.setup_faces
 ultralytics>=8.3,<9

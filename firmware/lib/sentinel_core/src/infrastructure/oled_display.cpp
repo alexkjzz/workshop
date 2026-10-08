@@ -5,12 +5,20 @@
 #include <Wire.h>
 
 void OledDisplay::begin() {
+  connected_ = false;
+  lastInitAt_ = millis();
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
   Wire.setClock(100000);
 
-  connected_ = display_.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
+  // SSD1306::begin() only checks allocation; an ACK proves an I2C device exists.
+  Wire.beginTransmission(OLED_ADDRESS);
+  if (Wire.endTransmission() != 0) {
+    Serial.println(F("OLED : NON DETECTE (I2C sans ACK)"));
+    return;
+  }
+  connected_ = display_.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS, true, false);
   if (!connected_) {
-    Serial.println(F("OLED : NON DETECTE"));
+    Serial.println(F("OLED : ECHEC INITIALISATION"));
     return;
   }
   // Tourner l'écran de 180 degrés
@@ -34,7 +42,18 @@ void OledDisplay::begin() {
 }
 
 void OledDisplay::render(const Readings &r, const DeviceStatus &s) {
-  if (!connected_) return;
+  if (!connected_) {
+    if (millis() - lastInitAt_ < 5000UL) return;
+    begin();
+    if (!connected_) return;
+  }
+  Wire.beginTransmission(OLED_ADDRESS);
+  if (Wire.endTransmission() != 0) {
+    connected_ = false;
+    lastInitAt_ = millis();
+    Serial.println(F("OLED : DECONNECTE (I2C sans ACK)"));
+    return;
+  }
 
   display_.clearDisplay();
   display_.setTextColor(SSD1306_WHITE);
@@ -45,6 +64,7 @@ void OledDisplay::render(const Readings &r, const DeviceStatus &s) {
   display_.setCursor(104, 0);
   if (s.alarmActive) display_.print(F("AL!"));
   else if (!s.systemReady) display_.print(F("..."));
+  else if (!r.climateValid) display_.print(F("ERR"));
   else display_.print(F("OK"));
   display_.drawLine(0, 9, 127, 9, SSD1306_WHITE);
 
@@ -81,7 +101,7 @@ void OledDisplay::render(const Readings &r, const DeviceStatus &s) {
   display_.print(F("GAS "));
   if (!s.gasReady) display_.print(F("WARM"));
   else if (s.gasAlert) display_.print(F("DANGER"));
-  else display_.print(F("SAFE"));
+  else display_.print(F("NORMAL"));
 
   display_.setCursor(100, 33);
   display_.print(r.gas);
@@ -122,7 +142,7 @@ void OledDisplay::render(const Readings &r, const DeviceStatus &s) {
   } else if (!r.climateValid) {
     display_.print(F("DHT SENSOR ERROR"));
   } else {
-    display_.print(F("SYSTEM SAFE"));
+    display_.print(F("MONITORING"));
   }
 
   display_.display();

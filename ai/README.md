@@ -115,7 +115,7 @@ un cinquieme terminal, depuis la racine, demarrer la passerelle USB :
 
 ```powershell
 .\ai\.venv\Scripts\python.exe -m pip install -r .\scripts\requirements-esp.txt
-.\ai\.venv\Scripts\python.exe .\scripts\esp_serial_bridge.py --port COM7
+.\ai\.venv\Scripts\python.exe .\scripts\esp_serial_bridge.py
 ```
 
 Fermer le moniteur serie avant de lancer la passerelle. Voir
@@ -176,6 +176,33 @@ Les sequences sont remises a zero apres une coupure ou un changement d'origine.
 pas une probabilite**. `confidence` exprime la marge et la disponibilite des
 donnees, et diminue si des champs sont manquants. Les principaux ecarts des
 features expliquent le resultat sans pretendre expliquer causalement le modele.
+
+## Qualite des mesures et separation des simulations
+
+Les canaux hors limites (-40..80 C, humidite 0..100 %, gaz ADC 0..1023)
+sont ignores individuellement avec une raison explicite ; les autres canaux
+restent analysables. NaN, infinis et presence autre que booleen/0/1 sont refuses.
+Ces limites ne prouvent pas la justesse physique d'une lecture : 76.8 C / 6.9 %
+reste transmis tel quel et exige une verification du capteur, pas une conversion.
+
+Les mesures perimees, anterieures a la derniere mesure de leur origine ou
+datees de plus de cinq secondes dans le futur ne remplacent pas l'etat courant
+ni la fenetre temporelle. Les observations distinctes avec IDs croissants
+peuvent partager un timestamp arrondi ; aucun intervalle fictif n'est ajoute.
+
+Live et simulation utilisent des fenetres temporelles distinctes et le meme
+modele charge. Les donnees simulees ne sont jamais fusionnees avec la webcam
+reelle. Les analyses reelles recentes restent prioritaires pendant trente
+secondes, avec conservation des simulations dans l'historique et le SSE.
+
+L'export SQLite omet les canaux explicitement invalides ou en chauffe/calibration
+selon les flags du firmware. Les anciens historiques sans flags restent lisibles ;
+leur normalite doit etre confirmee manuellement. Les lignes CSV hors plage sont
+refusees a l'entrainement, sans correction automatique. Aucun modele reel n'est
+entraine automatiquement sur les mesures courantes.
+
+Voir [validation capteurs et IA](../docs/VALIDATION_CAPTEURS_IA.md) pour les
+commandes de demarrage, les controles DHT et la procedure de test complete.
 
 ## Demonstration sans ESP8266
 
@@ -255,18 +282,37 @@ pas reconnaitre les visages.
 
 Le module local indépendant `app/vision/face_recognition.py` utilise OpenCV
 YuNet pour les visages et SFace pour leurs embeddings, sans remplacer YOLO ni
-ByteTrack. Il utilise les dépendances OpenCV/NumPy déjà installées.
+ByteTrack. Il utilise les dépendances OpenCV/NumPy déjà installées. Pillow,
+déjà présent via YOLO, est explicite dans `requirements-vision.txt` pour vérifier
+les photos, corriger leur orientation et supprimer leurs métadonnées EXIF.
 
 ```powershell
 Set-Location .\ai
+.\.venv\Scripts\python.exe -m pip install -r requirements-vision.txt
 .\.venv\Scripts\python.exe -m app.vision.setup_faces
 ```
 
-Placer 3 à 5 photos nettes contenant un seul visage par personne dans
-`ai/known_faces/Mohamed/photo1.jpg`, `photo2.jpg`, `photo3.jpg`. Chaque dossier
-porte le nom affiché. Le dossier est scanné au démarrage ; le bouton
+Dans **Caméra → Reconnaissance faciale → Ajouter une personne**, saisir un nom,
+sélectionner **1 à 5 photos**, puis cliquer **Enregistrer la personne**. Préférer
+3 à 5 photos nettes de la même personne, avec un seul visage par photo.
+JPEG/PNG/WebP sont acceptés : **5 Mio maximum par photo, 15 Mio par envoi,
+4096 pixels par côté et 16 mégapixels**. Le modèle facial doit être disponible ;
+la webcam peut rester arrêtée.
+
+Le navigateur envoie le JSON à `POST /api/ai/vision/faces/enroll` avec sa session ;
+Express relaie vers `POST /vision/faces/enroll` avec le token serveur éventuel.
+Les références sont enregistrées sous `FACE_KNOWN_DIR/Nom/` en JPEG nommés par UUID,
+sans écraser les anciennes photos, puis le catalogue est rechargé automatiquement.
+Réutiliser un nom existant ajoute des photos à cette identité. Chaque photo
+illisible, sans visage, trop petite ou avec plusieurs visages reçoit un motif
+de refus. Un envoi peut réussir partiellement ; les fichiers refusés restent
+sélectionnés pour correction. Si toutes les photos sont refusées, aucune
+référence n'est ajoutée.
+
+L'ajout manuel reste possible dans `ai/known_faces/Mohamed/photo1.jpg`,
+`photo2.jpg`, `photo3.jpg`. Chaque dossier porte le nom affiché. Le dossier
+est scanné au démarrage ; après ajout manuel, suppression ou remplacement,
 **Recharger les visages connus** recharge les photos sans redémarrer Python.
-Les photos sans visage, trop petites ou avec plusieurs visages sont ignorées.
 Sans identité connue, les visages restent `Unknown` / `Inconnu`.
 
 ```dotenv
@@ -280,6 +326,10 @@ FACE_MIN_SIZE_PIXELS=40
 FACE_DETECTOR_MODEL=models/face_detection_yunet_2023mar.onnx
 FACE_EMBEDDING_MODEL=models/face_recognition_sface_2021dec.onnx
 ```
+
+L'envoi conserve `FACE_KNOWN_DIR` et n'introduit aucune nouvelle variable `.env`.
+Relancer Python et Express une fois après mise à jour du code si ces services
+exécutent encore l'ancienne version, puis actualiser le dashboard.
 
 Le worker facial ne bloque pas la capture. Les 20 derniers événements restent
 en mémoire avec un cooldown de 5 secondes. Les résultats courants sont exposés
@@ -416,6 +466,7 @@ Set-Location ai
 .\.venv\Scripts\python.exe -m pytest -q
 Set-Location ..
 node .\scripts\check-ai-integration.mjs
+node .\scripts\check-face-enrollment.mjs
 ```
 
 Les tests entrainent leurs propres modeles temporaires sur des donnees
@@ -426,6 +477,14 @@ demarrage/arret/reprise, panne et reprise de l'IA, SQLite, protection des routes
 et SSE. L'integration lance un Python temporaire et utilise de vrais appels
 HTTP, parsing telemetrie, persistance et SSE ; aucun capteur, webcam ou broker
 n'est necessaire pour ces tests.
+
+`check-face-enrollment.mjs` utilise le frontend et Express compilés, un FastAPI
+temporaire, des photos synthétiques et un backend facial factice. Il vérifie le
+formulaire navigateur, la session, l'envoi via Express, les JPEG enregistrés,
+le rechargement et le rejet d'une photo sans visage. Installer Edge, Chrome ou
+Chromium, ou définir `FACE_TEST_BROWSER` ; `AI_TEST_PYTHON` permet de choisir
+un autre interpréteur que `ai/.venv`. Le test n'ouvre pas de webcam, n'utilise
+aucune photo connue réelle et ne mesure pas la précision biométrique.
 
 ## Depannage Windows
 

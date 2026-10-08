@@ -101,7 +101,7 @@ jobs:
         run: python -m unittest discover -s scripts/tests -v
 
   firmware:
-    name: ESP8266 firmware / compile only
+    name: Firmware tests and ESP8266 compile
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -113,6 +113,8 @@ jobs:
           python-version: '3.12'
       - name: Install PlatformIO
         run: python -m pip install 'platformio>=6.1,<7'
+      - name: Test the firmware logic with simulated hardware
+        run: python firmware/tests/run_native.py
       - name: Compile the current USB firmware
         working-directory: firmware
         run: python -m platformio run --environment nodemcuv2

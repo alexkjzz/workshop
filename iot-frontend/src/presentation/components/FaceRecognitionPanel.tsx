@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { UnauthorizedError } from '../../application/errors';
 import type { AiStatus } from '../../domain/ai';
-import { currentFaces, faceRecognitionLabel, type FaceRecognitionResult } from '../../domain/faces';
+import { faceEnrollmentUnavailable } from '../../domain/face-enrollment';
+import { currentFaces, faceRecognitionLabel, type FaceEnrollmentResponse, type FaceRecognitionResult } from '../../domain/faces';
 import { useServices } from '../services-context';
+import { FaceEnrollmentForm } from './FaceEnrollmentForm';
 import './FaceRecognitionPanel.css';
 
 const timeFormat = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'medium' });
@@ -18,7 +20,7 @@ interface Props {
 export function FaceRecognitionPanel({ status, now, onRefresh, onSessionExpired }: Props) {
   const { aiApi } = useServices();
   const [reloaded, setReloaded] = useState<FaceRecognitionResult | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'reload' | 'enroll' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
@@ -31,7 +33,7 @@ export function FaceRecognitionPanel({ status, now, onRefresh, onSessionExpired 
     if (request.current) return;
     const controller = new AbortController();
     request.current = controller;
-    setBusy(true);
+    setBusy('reload');
     setError(null);
     try {
       const loaded = await aiApi.reloadFaces(controller.signal);
@@ -45,7 +47,32 @@ export function FaceRecognitionPanel({ status, now, onRefresh, onSessionExpired 
       else setError(failure instanceof Error ? failure.message : 'Rechargement indisponible.');
     } finally {
       request.current = null;
-      if (!controller.signal.aborted) setBusy(false);
+      if (!controller.signal.aborted) setBusy(null);
+    }
+  }
+
+  async function enroll(name: string, files: File[]): Promise<FaceEnrollmentResponse | null> {
+    if (request.current || faceEnrollmentUnavailable(status, result)) return null;
+    const controller = new AbortController();
+    request.current = controller;
+    setBusy('enroll');
+    setError(null);
+    try {
+      const response = await aiApi.enrollFaces(name, files, controller.signal);
+      if (controller.signal.aborted) return null;
+      setReloaded(response.catalog);
+      setError(response.catalog.reload_error);
+      await onRefresh();
+      return controller.signal.aborted ? null : response;
+    } catch (failure) {
+      if (!controller.signal.aborted) {
+        if (failure instanceof UnauthorizedError) onSessionExpired();
+        else setError(failure instanceof Error ? failure.message : 'Ajout des photos indisponible.');
+      }
+      return null;
+    } finally {
+      request.current = null;
+      if (!controller.signal.aborted) setBusy(null);
     }
   }
 
@@ -57,13 +84,13 @@ export function FaceRecognitionPanel({ status, now, onRefresh, onSessionExpired 
       </div>
       <p className="detection-current" role="status">{faceRecognitionLabel(status, result, now)}</p>
       <div className="face-catalog">
-        <p>{result ? `${result.known_identities} identité(s) connue(s) · ${result.reference_images} photo(s) de référence` : moduleMissing ? 'Catalogue facial indisponible' : 'Catalogue en attente'}</p>
-        <button type="button" onClick={() => void reload()} disabled={!status?.online || moduleMissing || result?.enabled === false || busy || result?.reloading}>
-          {busy || result?.reloading ? 'Rechargement…' : 'Recharger les visages connus'}
+        <p>{result ? <><strong>{result.known_identities}</strong> identité(s) connue(s) · <strong>{result.reference_images}</strong> photo(s) de référence</> : moduleMissing ? 'Catalogue facial indisponible' : 'Catalogue en attente'}</p>
+        <button type="button" onClick={() => void reload()} disabled={!status?.online || moduleMissing || result?.enabled === false || busy !== null || result?.reloading}>
+          {busy === 'reload' || result?.reloading ? 'Rechargement…' : 'Recharger les visages connus'}
         </button>
       </div>
       {result?.model_loaded && result.known_identities === 0 && (
-        <p className="camera-ai-summary">Ajoutez vos photos dans ai/known_faces/Nom/ puis rechargez. Les visages détectés apparaîtront comme Inconnu.</p>
+        <p className="camera-ai-summary">Ajoutez une personne avec le formulaire ci-dessous. Les visages non enregistrés apparaîtront comme Inconnu.</p>
       )}
       {!!result?.skipped_images && <p className="camera-ai-summary">{result.skipped_images} photo(s) ignorée(s) : consultez les logs du service IA.</p>}
       {(error || result?.error || result?.reload_error) && <p className="camera-ai-error" role="alert">{error || result?.error || result?.reload_error}</p>}
@@ -80,6 +107,10 @@ export function FaceRecognitionPanel({ status, now, onRefresh, onSessionExpired 
         ))}
       </div>
       {faces.length > 0 && <p className="camera-ai-summary">La confiance correspond à la similarité faciale, pas à une probabilité d’identité.</p>}
+      <FaceEnrollmentForm busy={busy === 'enroll'}
+        disabledReason={busy === 'reload' ? 'Attendez la fin du rechargement du catalogue.' : faceEnrollmentUnavailable(status, result)}
+        onEnroll={enroll} />
+      <h3 className="camera-history-heading">Dernières reconnaissances</h3>
       <div className="history">
         <table>
           <caption className="visually-hidden">Historique des reconnaissances faciales</caption>

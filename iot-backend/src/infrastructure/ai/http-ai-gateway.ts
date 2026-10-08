@@ -1,6 +1,8 @@
 import type { AiGateway } from '../../application/ports.js';
+import { FaceEnrollmentError } from '../../application/errors.js';
 import type { AiSensorSample } from '../../domain/ai.js';
-import { parseAiPrediction, parseAiStatus, parseAiVision, parseFaces, parseFaceLatest, parseFaceHistory } from './ai-contract.js';
+import type { FaceEnrollmentRequest } from '../../domain/faces.js';
+import { parseAiPrediction, parseAiStatus, parseAiVision, parseFaces, parseFaceLatest, parseFaceHistory, parseFaceEnrollment } from './ai-contract.js';
 
 export class HttpAiGateway implements AiGateway {
   private readonly baseUrl: string;
@@ -26,12 +28,21 @@ export class HttpAiGateway implements AiGateway {
   async facesLatest() { return parseFaceLatest(await this.request('/vision/faces/latest')); }
   async facesHistory() { return parseFaceHistory(await this.request('/vision/faces/history')); }
   async reloadFaces() { return parseFaces(await this.request('/vision/faces/reload', 'POST', undefined, 60_000)); }
+  async enrollFaces(request: FaceEnrollmentRequest) {
+    const result = parseFaceEnrollment(await this.request('/vision/faces/enroll', 'POST', request, 60_000));
+    if (result.name.normalize('NFC').toLowerCase() !== request.name.normalize('NFC').toLowerCase()
+      || result.added + result.rejected.length !== request.images.length
+      || result.rejected.some((item) => !request.images.some((image) => image.filename === item.filename))) {
+      throw new Error('AI face enrollment does not match the submitted photos.');
+    }
+    return result;
+  }
 
   async controlVision(action: 'start' | 'stop') {
     return parseAiVision(await this.request(`/vision/${action}`, 'POST'));
   }
 
-  private async request(path: string, method = 'GET', body?: AiSensorSample, timeoutMs = this.timeoutMs): Promise<unknown> {
+  private async request(path: string, method = 'GET', body?: AiSensorSample | FaceEnrollmentRequest, timeoutMs = this.timeoutMs): Promise<unknown> {
     if (!this.isConfigured()) throw new Error('AI service is disabled.');
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
@@ -45,6 +56,18 @@ export class HttpAiGateway implements AiGateway {
       });
       if (response.status === 404 && path.startsWith('/vision/faces/')) {
         throw new Error('Le service IA lancé ne fournit pas les routes faciales. Redémarrez le service IA pour charger le nouveau code.');
+      }
+      if (!response.ok && path === '/vision/faces/enroll' && [400, 413, 422, 503].includes(response.status)) {
+        const payload: unknown = await response.json().catch(() => null);
+        const detail = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>).detail ?? (payload as Record<string, unknown>).message : null;
+        // FastAPI validation arrays may contain the submitted photo under `input`.
+        // Only a bounded, explicit service message is exposed to the browser.
+        const message = typeof detail === 'string' && detail.length > 0 && detail.length <= 1000 ? detail
+          : response.status === 413 ? 'Les photos dépassent la taille autorisée.'
+            : response.status === 503 ? 'Le modèle facial est indisponible. Vérifiez les modèles du service IA.'
+              : 'Les données des photos sont invalides. Vérifiez le nom et les fichiers sélectionnés.';
+        throw new FaceEnrollmentError(message, response.status as 400 | 413 | 422 | 503);
       }
       if (!response.ok) throw new Error(`AI service returned HTTP ${response.status}.`);
       return await response.json();

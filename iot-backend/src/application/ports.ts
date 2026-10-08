@@ -1,7 +1,7 @@
 import type { NotificationSettings } from '../domain/notification.js';
 import type { DeviceCommand, Reading, Telemetry } from '../domain/telemetry.js';
 import type { VisionDetection } from '../domain/vision.js';
-import type { FaceHistory, FaceLatest, FaceRecognitionResult } from '../domain/faces.js';
+import type { FaceEnrollmentRequest, FaceEnrollmentResult, FaceHistory, FaceLatest, FaceRecognitionResult } from '../domain/faces.js';
 import type { AiPrediction, AiSensorSample, AiServiceStatus, AiSource, AiStatus, StoredAiPrediction, VisionResult } from '../domain/ai.js';
 
 export interface ReadingRepository {
@@ -31,6 +31,7 @@ export interface AiGateway {
   facesLatest?(): Promise<FaceLatest>;
   facesHistory?(): Promise<FaceHistory>;
   reloadFaces?(): Promise<FaceRecognitionResult>;
+  enrollFaces?(request: FaceEnrollmentRequest): Promise<FaceEnrollmentResult>;
   controlVision(action: 'start' | 'stop'): Promise<VisionResult>;
 }
 

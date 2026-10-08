@@ -92,6 +92,7 @@ npm.cmd --prefix iot-frontend run lint
 npm.cmd --prefix iot-frontend run build
 .\ai\.venv\Scripts\python.exe -m pytest ai\tests -q
 .\ai\.venv\Scripts\python.exe -m unittest discover -s scripts\tests -v
+.\ai\.venv\Scripts\python.exe firmware\tests\run_native.py
 pio run -d firmware -e nodemcuv2
 ```
 

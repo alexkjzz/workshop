@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { anomalyLabel, currentAiVision, predictionEvents, riskLabel, type AiPrediction, type AiStatus, type VisionStatus } from '../../domain/ai';
+import { anomalyLabel, currentAiPrediction, currentAiVision, predictionEvents, riskLabel, type AiPrediction, type AiStatus, type VisionStatus } from '../../domain/ai';
 import { StatusIndicator } from './StatusIndicator';
 import { VisionCamera } from './VisionCamera';
 import './AiPanel.css';
@@ -36,7 +36,7 @@ export function AiPanel({ status, predictions, loadError, onSessionExpired, onRe
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-  const latest = predictions[0];
+  const latest = currentAiPrediction(predictions, now);
   const vision = status?.vision ?? latest?.vision;
   const visionReady = status?.online && currentAiVision(vision, now) !== null;
   const risk = latest?.risk;

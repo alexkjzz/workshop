@@ -1,11 +1,16 @@
 .chart {
   position: relative;
+  width: 100%;
+  min-width: 0;
   height: 128px;
-  margin-top: 12px;
+  margin-top: 20px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, var(--surface)), var(--surface));
 }
 
 .chart svg {
   display: block;
+  max-width: 100%;
   overflow: visible;
   touch-action: pan-y;
 }
@@ -13,61 +18,73 @@
 .chart--empty {
   display: grid;
   place-items: center;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--border-strong);
+  padding: 12px;
   color: var(--text-muted);
-  font-size: 13px;
+  background: var(--surface-raised);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .chart-grid {
-  stroke: var(--grid);
+  stroke: var(--border);
   stroke-width: 1;
+  stroke-dasharray: 3 4;
 }
 
 .chart-tick {
   fill: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .chart-line {
   fill: none;
-  stroke: var(--series);
-  stroke-width: 2;
+  stroke: var(--accent);
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .chart-area {
-  fill: var(--series);
-  fill-opacity: 0.1;
+  fill: var(--accent);
+  fill-opacity: 0.09;
   stroke: none;
 }
 
 .chart-point {
-  fill: var(--series);
+  fill: var(--accent);
 }
 
 .chart-dot {
-  fill: var(--series);
-  stroke: var(--bg);
+  fill: var(--accent);
+  stroke: var(--surface);
   stroke-width: 2;
 }
 
 .chart-crosshair {
   stroke: var(--text-muted);
   stroke-width: 1;
+  stroke-dasharray: 3 3;
 }
 
 .chart-tooltip {
   position: absolute;
+  z-index: 2;
   top: -6px;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  padding: 4px 8px;
-  background: var(--bg);
-  font-size: 12px;
-  line-height: 1.35;
+  gap: 3px;
+  max-width: min(160px, 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  line-height: 1.5;
   pointer-events: none;
   transform: translate(-50%, -100%);
   white-space: nowrap;

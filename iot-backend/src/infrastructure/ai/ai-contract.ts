@@ -1,5 +1,5 @@
 import type { AiPrediction, AiServiceStatus, VisionResult } from '../../domain/ai.js';
-import type { FaceDetection, FaceHistory, FaceLatest, FaceRecognitionResult } from '../../domain/faces.js';
+import type { FaceDetection, FaceEnrollmentResult, FaceHistory, FaceLatest, FaceRecognitionResult } from '../../domain/faces.js';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): value is ObjectValue => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -54,6 +54,19 @@ export function parseFaceLatest(value: unknown): FaceLatest {
 export function parseFaceHistory(value: unknown): FaceHistory {
   if (!object(value) || !faceArray(value.faces, 20)) throw new Error('AI service returned invalid face history.');
   return value as unknown as FaceHistory;
+}
+
+export function parseFaceEnrollment(value: unknown): FaceEnrollmentResult {
+  if (!object(value) || typeof value.name !== 'string' || !value.name || Array.from(value.name.normalize('NFC')).length > 64
+    || !integer(value.added) || value.added > 5 || !Array.isArray(value.rejected) || value.rejected.length > 5
+    || value.added + value.rejected.length > 5
+    || !value.rejected.every((item) => object(item) && typeof item.filename === 'string'
+      && item.filename.length > 0 && Array.from(item.filename).length <= 255
+      && typeof item.message === 'string' && item.message.length > 0 && item.message.length <= 1000)
+    || !isFaces(value.catalog)) {
+    throw new Error('AI service returned invalid face enrollment metadata.');
+  }
+  return value as unknown as FaceEnrollmentResult;
 }
 
 function isVision(value: unknown): value is VisionResult {

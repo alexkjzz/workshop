@@ -31,7 +31,10 @@ def read_samples(path: Path) -> list[SensorSample]:
                 else:
                     # Without timestamps assume the firmware's 2-second cadence.
                     data["timestamp"] = index * 2
-                samples.append(SensorSample.model_validate(data))
+                sample = SensorSample.model_validate(data)
+                if sample.quality_issues:
+                    raise ValueError("; ".join(sample.quality_issues))
+                samples.append(sample)
             except Exception as error:
                 raise ValueError(f"Invalid CSV row {index}: {error}") from error
     return sorted(samples, key=lambda sample: sample.timestamp)
@@ -41,6 +44,8 @@ def train(samples: list[SensorSample], output: Path, window: int = 12,
           contamination: float = 0.03, seed: int = 42) -> dict:
     if len(samples) < 128:
         raise ValueError("At least 128 normal samples required; use real CSV or explicit simulator --generate-training")
+    if any(sample.quality_issues for sample in samples):
+        raise ValueError("Training data contains sensor values outside physical ranges")
     medians = {}
     for name in BASE_FEATURES:
         observed = [float(getattr(sample, name)) for sample in samples if getattr(sample, name) is not None]

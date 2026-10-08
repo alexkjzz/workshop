@@ -7,8 +7,8 @@ import { RecordTelemetry } from './record-telemetry.js';
 
 class InMemoryReadings implements ReadingRepository {
   readings: Reading[] = [];
-  save(telemetry: Telemetry, recordedAt: Date): Reading {
-    const reading = { id: this.readings.length + 1, recordedAt, ...telemetry };
+  save(telemetry: Telemetry, recordedAt: Date, source: 'live' | 'simulation' = 'live'): Reading {
+    const reading = { id: this.readings.length + 1, recordedAt, ...telemetry, source };
     this.readings.push(reading);
     return reading;
   }
@@ -61,4 +61,18 @@ test('hardware flags reach device status, history and live reading events unchan
   assert.deepEqual(state.latest().telemetry, telemetry);
   assert.deepEqual(readings.findRecent(1), [reading]);
   assert.deepEqual(published, [{ type: 'reading', reading, source: 'live' }]);
+});
+
+test('simulation remains stored and streamed without replacing the physical status', () => {
+  const { readings, state, published, recordTelemetry } = setup();
+  const physical = recordTelemetry.execute({ telemetry: { gas: 38, gasReady: true,
+    alarmActive: true, ledRed: true }, source: 'live' });
+  const simulated = recordTelemetry.execute({ telemetry: { gas: 700, alarmActive: false,
+    ledRed: false }, source: 'simulation' });
+  assert.equal(simulated.source, 'simulation');
+  assert.equal(readings.readings.length, 2);
+  assert.deepEqual(readings.findRecent(2), [physical, simulated]);
+  assert.deepEqual(state.latest(), { telemetry: { gas: 38, gasReady: true, alarmActive: true,
+    ledRed: true }, lastMessageAt: physical.recordedAt });
+  assert.deepEqual(published.at(-1), { type: 'reading', reading: simulated, source: 'simulation' });
 });

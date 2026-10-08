@@ -36,6 +36,7 @@ function MetricHistory({ metric, readings }: { metric: MetricView; readings: Rea
   return (
     <>
       <LineChart points={points} label={metric.label} formatValue={metric.format} steps={metric.steps} />
+      <p className="reading-history-label">Dernières mesures</p>
       <div className="history">
         <table>
           <caption className="visually-hidden">Valeurs précédentes : {metric.label}</caption>
@@ -100,15 +101,22 @@ export function MetricsPage({
   return (
     <main className="dashboard">
       <header className="page-header">
-        {loading ? (
-          <StatusIndicator tone="neutral" label="Connexion au serveur..." />
-        ) : loadError ? (
-          <StatusIndicator tone="danger" label="Backend indisponible" />
-        ) : status?.mqttConnected ? (
-          <StatusIndicator tone="success" label="Broker MQTT connecté" />
-        ) : (
-          <StatusIndicator tone="danger" label="Broker MQTT déconnecté" />
-        )}
+        <div className="page-intro">
+          <p className="page-eyebrow">Surveillance du boîtier</p>
+          <h1>Métriques</h1>
+          <p>Suivez les capteurs, l’état de votre ESP et les analyses de Sentinel-X.</p>
+        </div>
+        <div className="dashboard-connection">
+          {loading ? (
+            <StatusIndicator tone="neutral" label="Connexion au serveur..." />
+          ) : loadError ? (
+            <StatusIndicator tone="danger" label="Backend indisponible" />
+          ) : status?.mqttConnected ? (
+            <StatusIndicator tone="success" label="Broker MQTT connecté" />
+          ) : (
+            <StatusIndicator tone="danger" label="Broker MQTT déconnecté" />
+          )}
+        </div>
       </header>
 
       <EspStatusPanel telemetry={telemetry} message={espMessage} />
@@ -124,7 +132,9 @@ export function MetricsPage({
             return (
               <div className="reading" key={metric.key}>
                 <dt>{metric.label}</dt>
-                <dd>{value === undefined ? 'Aucune donnée' : metric.format(value)}</dd>
+                <dd className={value === undefined ? 'reading-value--empty' : undefined}>
+                  {value === undefined ? 'Aucune donnée' : metric.format(value)}
+                </dd>
                 <MetricHistory metric={metric} readings={readings} />
               </div>
             );
@@ -141,7 +151,10 @@ export function MetricsPage({
       />
 
       <section className="commands" aria-labelledby="commands-title">
-        <h2 id="commands-title">Commande LED</h2>
+        <div className="section-heading">
+          <h2 id="commands-title">Commande LED</h2>
+          <span>Contrôle du boîtier</span>
+        </div>
         <p className="command-note">Les commandes LED nécessitent un firmware MQTT ; la passerelle USB transmet uniquement les mesures.</p>
         <div className="command-buttons">
           <button

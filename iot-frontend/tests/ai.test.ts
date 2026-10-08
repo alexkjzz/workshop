@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   AI_HISTORY_SIZE,
   anomalyLabel,
+  currentAiPrediction,
   currentAiVision,
   mergeAiPredictions,
   personDetectionHistory,
@@ -59,6 +60,28 @@ test('untrained, missing and failed anomaly analyses never display NORMAL', () =
   }
   assert.equal(anomalyLabel({ ...anomaly, is_anomaly: null }), 'En attente');
   assert.equal(anomalyLabel(null), 'En attente');
+});
+
+test('recent physical analysis remains primary while demo results stay in history', () => {
+  const live = prediction(1);
+  const demo = { ...prediction(2, '2026-10-06T10:00:02Z'), source: 'simulation' as const };
+  const now = Date.parse(demo.timestamp);
+  const history = mergeAiPredictions([live], [demo]);
+  assert.deepEqual(history.map(({ id }) => id), [2, 1]);
+  assert.equal(currentAiPrediction(history, now), live);
+  assert.equal(currentAiPrediction(history, Date.parse(live.sensor_timestamp!) + 30_001), demo);
+  assert.equal(currentAiPrediction([demo], now), demo);
+  assert.equal(currentAiPrediction([], now), undefined);
+});
+
+test('a refreshed analysis cannot make stale or far-future sensor data current', () => {
+  const demo = { ...prediction(2, '2026-10-06T10:01:00Z'), source: 'simulation' as const };
+  const now = Date.parse(demo.timestamp);
+  const stale = { ...prediction(1), timestamp: demo.timestamp };
+  assert.equal(currentAiPrediction([demo, stale], now), demo);
+  const future = prediction(3, new Date(now + 5001).toISOString());
+  assert.equal(currentAiPrediction([demo, future], now), demo);
+  assert.equal(currentAiPrediction([demo, { ...future, sensor_timestamp: 'invalid' }], now), demo);
 });
 
 test('incomplete risk data cannot reassure the operator with SAFE', () => {

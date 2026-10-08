@@ -75,6 +75,29 @@ def test_fresh_video_does_not_refresh_old_person_evidence():
     assert result.risk_score == 0 and result.degraded
 
 
+@pytest.mark.parametrize("presence,score", [(False, 0), (True, 35)])
+def test_simulated_sensors_are_never_correlated_with_real_camera(presence, score):
+    now = utc_now()
+    sample = SensorSample(temperature=23, humidity=50, gas=140, presence=presence,
+                          source="simulation", timestamp=now)
+    vision = VisionResult(status="running", detection_status="running", confirmed=True,
+                          person_detected=True, person_count=1, max_confidence=.99, timestamp=now)
+    result = evaluate(fuse(sample, normal(now), vision, now), now)
+    assert result.risk_score == score and result.degraded
+    assert any("Simulation" in reason for reason in result.reasons)
+    assert not any("Person detected by camera" in reason for reason in result.reasons)
+
+
+def test_invalid_climate_channel_degrades_analysis_but_valid_modalities_still_work():
+    now = utc_now()
+    sample = SensorSample(temperature=81, humidity=50, gas=140, presence=True, timestamp=now)
+    vision = VisionResult(status="running", detection_status="running", confirmed=True,
+                          person_detected=True, max_confidence=.9, timestamp=now)
+    result = evaluate(fuse(sample, normal(now), vision, now), now)
+    assert result.risk_score >= 90 and result.degraded
+    assert any("temperature outside" in reason for reason in result.reasons)
+
+
 @pytest.mark.parametrize("score,level", [(0,"SAFE"),(24,"SAFE"),(25,"LOW"),(49,"LOW"),
                                         (50,"MEDIUM"),(74,"MEDIUM"),(75,"HIGH"),(89,"HIGH"),
                                         (90,"CRITICAL"),(100,"CRITICAL")])

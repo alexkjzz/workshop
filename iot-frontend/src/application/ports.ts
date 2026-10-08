@@ -1,6 +1,6 @@
 import type { NotificationSettings, NotificationSettingsView } from '../domain/notifications';
 import type { AiPrediction, AiStatus, AiVisionResult } from '../domain/ai';
-import type { FaceDetection, FaceLatest, FaceRecognitionResult } from '../domain/faces';
+import type { FaceDetection, FaceEnrollmentResponse, FaceLatest, FaceRecognitionResult } from '../domain/faces';
 import type { SignInFailure, UserSession } from '../domain/session';
 import type { DeviceCommand, DeviceStatus, Reading } from '../domain/telemetry';
 import type { VisionDetection } from '../domain/vision';
@@ -35,6 +35,7 @@ export interface AiApi {
   getFacesLatest(signal?: AbortSignal): Promise<FaceLatest>;
   getFacesHistory(signal?: AbortSignal): Promise<FaceDetection[]>;
   reloadFaces(signal?: AbortSignal): Promise<FaceRecognitionResult>;
+  enrollFaces(name: string, files: File[], signal?: AbortSignal): Promise<FaceEnrollmentResponse>;
 }
 
 export interface LiveFeedHandlers {

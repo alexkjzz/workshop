@@ -20,7 +20,7 @@ import { liveRoutes } from './routes/live-routes.js';
 import { readingRoutes } from './routes/reading-routes.js';
 import { settingsRoutes } from './routes/settings-routes.js';
 import { visionRoutes } from './routes/vision-routes.js';
-import { aiRoutes } from './routes/ai-routes.js';
+import { aiRoutes, enrollFacesHandler } from './routes/ai-routes.js';
 
 export interface HttpDependencies {
   useCases: {
@@ -59,6 +59,9 @@ export function createHttpApp({
 
   // Better Auth must receive the raw body, before express.json().
   app.all('/api/auth/*splat', authHandler);
+  // Photo bodies are parsed only on this route, after session verification.
+  if (ai) app.post('/api/ai/vision/faces/enroll', requireSession(sessions),
+    express.json({ limit: '21mb' }), enrollFacesHandler(ai));
   app.use(express.json({ limit: '16kb' }));
 
   app.get('/api/health', (_request, response) => {

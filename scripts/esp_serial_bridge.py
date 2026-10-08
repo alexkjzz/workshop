@@ -120,6 +120,55 @@ class StatusBlockParser:
         return None
 
 
+class StatusStreamParser:
+    """Keep partial USB lines across read timeouts, with bounded memory/time."""
+
+    def __init__(self, timeout: float = 3.0):
+        self.timeout = timeout
+        self._parser = StatusBlockParser(timeout)
+        self.reset()
+
+    def reset(self) -> None:
+        self._parser.reset()
+        self._line = bytearray()
+        self._partial_since: float | None = None
+        self._discarding = False
+
+    def feed(self, data: bytes, now: float | None = None) -> list[dict[str, Any]]:
+        now = time.monotonic() if now is None else now
+        if self._partial_since is not None and now - self._partial_since > self.timeout:
+            self._line.clear()
+            self._partial_since = None
+            self._discarding = True
+            self._parser.reset()
+        results = []
+        for byte in data:
+            if byte == 10:
+                if not self._discarding:
+                    try:
+                        line = self._line.decode("utf-8", errors="strict")
+                    except UnicodeDecodeError:
+                        self._parser.reset()
+                    else:
+                        value = self._parser.feed_line(line, now)
+                        if value is not None:
+                            results.append(value)
+                self._line.clear()
+                self._partial_since = None
+                self._discarding = False
+            elif not self._discarding:
+                if self._partial_since is None:
+                    self._partial_since = now
+                if len(self._line) >= MAX_LINE_BYTES:
+                    self._line.clear()
+                    self._partial_since = None
+                    self._discarding = True
+                    self._parser.reset()
+                else:
+                    self._line.append(byte)
+        return results
+
+
 @dataclass(frozen=True)
 class PendingSample:
     payload: dict[str, Any]
@@ -208,6 +257,17 @@ def select_serial_port(ports: Any, explicit_port: str | None = None) -> str:
     return candidates[0].device
 
 
+def serial_port_hint(ports: Any, explicit_port: str | None = None) -> str:
+    ports = list(ports)
+    available = ", ".join(f"{port.device} ({port.description})" for port in ports) or "aucun"
+    hint = f"Ports detectes : {available}."
+    if explicit_port and not any(port.device.casefold() == explicit_port.casefold() for port in ports):
+        hint += f" {explicit_port} absent ; verifiez --list-ports et --port."
+        if len(usb_candidates(ports)) == 1:
+            hint += " Sans --port, l'unique port USB sera selectionne automatiquement."
+    return hint
+
+
 def _positive_int(value: str) -> int:
     number = int(value)
     if number <= 0:
@@ -278,10 +338,12 @@ def main(argv: list[str] | None = None) -> int:
     client.loop_start()
     samples = LatestSampleBuffer()
     forwarder = MqttForwarder(client, args.mqtt_topic, samples)
-    parser = StatusBlockParser()
+    parser = StatusStreamParser()
     device = None
     next_attempt = 0.0
     previous_error = None
+    last_block_at = 0.0
+    last_stale_warning: float | None = None
     LOGGER.info("Lecture USB seule ; aucun ordre envoye au firmware. Ctrl+C pour arreter.")
     try:
         while True:
@@ -299,7 +361,8 @@ def main(argv: list[str] | None = None) -> int:
                     time.sleep(0.1)
                     continue
                 try:
-                    port = select_serial_port(list_ports.comports(), args.port)
+                    ports = list(list_ports.comports())
+                    port = select_serial_port(ports, args.port)
                     # Set modem lines before opening; never write sensor commands.
                     device = serial.Serial(port=None, baudrate=args.baud, timeout=0.25)
                     device.dtr = False
@@ -309,33 +372,38 @@ def main(argv: list[str] | None = None) -> int:
                     device.reset_input_buffer()
                     parser.reset()
                     previous_error = None
+                    last_block_at = time.monotonic()
+                    last_stale_warning = None
                     LOGGER.info("Port %s ouvert a %s bauds", port, args.baud)
                 except (serial.SerialException, OSError, ValueError) as error:
                     if device is not None:
                         device.close()
                     device = None
-                    text = str(error)
+                    text = f"{error}. {serial_port_hint(list_ports.comports(), args.port)}"
                     if text != previous_error:
                         LOGGER.warning("USB indisponible : %s (reessai dans 2 s)", text)
                         previous_error = text
                     next_attempt = time.monotonic() + 2
                     continue
             try:
-                line = device.read_until(b"\n", size=MAX_LINE_BYTES + 1)
-                if not line:
-                    continue
-                if not line.endswith(b"\n"):
-                    parser.reset()
-                    continue
-                try:
-                    text = line.decode("utf-8", errors="strict")
-                except UnicodeDecodeError:
-                    parser.reset()
-                    continue
-                telemetry = parser.feed_line(text)
-                if telemetry is not None:
+                chunk = device.read_until(b"\n", size=MAX_LINE_BYTES + 1)
+                received_at = time.monotonic()
+                for telemetry in parser.feed(chunk, received_at):
+                    if last_stale_warning is not None:
+                        LOGGER.info("Reception de blocs Sentinel-X retablie sur %s", port)
+                    last_block_at = received_at
+                    last_stale_warning = None
                     payload = {"source": "live", "device": args.device, "ts": time.time(), **telemetry}
-                    samples.put(payload, time.monotonic())
+                    samples.put(payload, received_at)
+                if received_at - last_block_at >= 10 and (
+                    last_stale_warning is None or received_at - last_stale_warning >= 30
+                ):
+                    LOGGER.warning(
+                        "Port %s ouvert mais aucun bloc Sentinel-X valide depuis %.0f s ; "
+                        "verifiez le firmware USB, le debit %s et le moniteur serie.",
+                        port, received_at - last_block_at, args.baud,
+                    )
+                    last_stale_warning = received_at
             except (serial.SerialException, OSError) as error:
                 LOGGER.warning("Port USB perdu : %s", error)
                 device.close()

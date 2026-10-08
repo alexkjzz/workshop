@@ -13,4 +13,5 @@ class OledDisplay : public DisplayPort {
  private:
   Adafruit_SSD1306 display_{OLED_WIDTH, OLED_HEIGHT, &Wire, -1};
   bool connected_ = false;
+  uint32_t lastInitAt_ = 0;
 };

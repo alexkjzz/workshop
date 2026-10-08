@@ -6,6 +6,10 @@ page Camera (flux de la webcam et reconnaissance faciale) et page Parametres
 (notifications par e-mail). Theme clair/sombre (suit le
 systeme jusqu'au premier choix).
 
+Les pages partagent les couleurs, surfaces, boutons et focus clavier definis dans
+`src/presentation/index.css`. Les panneaux s'adaptent aux grands ecrans et au
+mobile ; les historiques larges defilent dans leur propre tableau.
+
 La page Metriques affiche aussi **AI ENGINE** : disponibilite du service,
 Isolation Forest, score d'anomalie, risque fusionne, confiance et evenements
 recents. Un modele non entraine, des donnees manquantes ou une analyse partielle
@@ -51,7 +55,9 @@ celle du PC serveur; le navigateur ne demande pas d'acces a sa propre camera.
 La section **Reconnaissance faciale** reçoit `vision.faces` via le statut IA et
 le SSE existant. Elle affiche les noms, Connu/Inconnu, similarité, heure et
 tracker ID lorsqu'il existe, ainsi que les 20 événements récents. Le bouton
-de rechargement appelle `/api/ai/vision/faces/reload` via Express. Les photos de
+de rechargement appelle `/api/ai/vision/faces/reload` via Express. Le formulaire
+**Ajouter une personne** envoie un nom et une a cinq photos via
+`/api/ai/vision/faces/enroll`, puis actualise le catalogue automatiquement. Les photos de
 référence restent dans le service Python ; voir
 [Face Recognition](../docs/FACE_RECOGNITION.md).
 
@@ -70,3 +76,16 @@ En production, l'image Docker sert le build avec nginx (`nginx.conf`), qui
 relaie `/api` vers le backend et applique les en-tetes de securite (CSP).
 `public/theme-init.js` applique le theme avant le premier affichage ; c'est un
 fichier externe pour rester compatible avec la CSP.
+
+Apres le build, depuis la racine du depot :
+
+```sh
+node scripts/check-frontend-style.mjs
+```
+
+Ce controle pilote Edge, Chrome ou Chromium sur une instance Vite isolee avec
+des reponses API factices. Il verifie les quatre pages en clair/sombre, a
+1440, 375 et 320 pixels, le focus clavier, les commandes accessibles et les
+contrastes de texte principaux. Les captures et le rapport sont conserves dans
+`.runtime/`. Aucun service reel, webcam, envoi d'e-mail ou commande ESP n'est
+utilise. `STYLE_TEST_BROWSER` permet de choisir l'executable du navigateur.

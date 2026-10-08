@@ -1,10 +1,11 @@
 import type { AiPrediction, AiSensorSample, AiSource, AiStatus, StoredAiPrediction, VisionResult } from '../domain/ai.js';
 import type { Reading } from '../domain/telemetry.js';
-import type { FaceRecognitionResult } from '../domain/faces.js';
+import type { FaceEnrollmentRequest, FaceRecognitionResult } from '../domain/faces.js';
 import { InvalidRequestError } from './errors.js';
 import type { AiGateway, AiPredictionRepository, Clock, LiveEvents } from './ports.js';
 
 const LIVE_SAMPLE_MAX_AGE_MS = 30_000;
+const SAMPLE_CLOCK_SKEW_MS = 5_000;
 const MAX_HISTORY = 500;
 
 // Serial inference preserves temporal feature order. MQTT and HTTP never wait for it.
@@ -14,8 +15,9 @@ export class AiCoordinator {
   private checking = false;
   private closed = false;
   private visionRevision = 0;
-  private lastSensorTime = -Infinity;
-  private latest: StoredAiPrediction | null;
+  private readonly lastSensorTime: Record<AiSource, number> = { live: -Infinity, simulation: -Infinity };
+  private readonly latestBySource: Record<AiSource, StoredAiPrediction | null> = { live: null, simulation: null };
+  private readonly recordedKeys = new Set<string>();
   private state: AiStatus = {
     online: false, model_loaded: false, vision: null,
     last_success_at: null, last_error: null, queue_depth: 0, dropped_samples: 0,
@@ -30,7 +32,10 @@ export class AiCoordinator {
     cameraSource: AiStatus['camera_source'] = 'ai',
   ) {
     this.state.camera_source = cameraSource;
-    this.latest = repository.findRecent(1)[0] ?? null;
+    for (const prediction of repository.findRecent(MAX_HISTORY)) {
+      this.recordedKeys.add(this.predictionKey(prediction));
+      this.latestBySource[prediction.source] ??= prediction;
+    }
   }
 
   enqueue(reading: Reading, source: AiSource = reading.source ?? 'live') {
@@ -38,8 +43,9 @@ export class AiCoordinator {
     const timestamp = reading.recordedAt.getTime();
     const age = this.clock.now().getTime() - timestamp;
     // History replay is stored by the backend, but cannot become a current threat.
-    if (age > LIVE_SAMPLE_MAX_AGE_MS || age < -60_000 || timestamp < this.lastSensorTime) return;
-    this.lastSensorTime = timestamp;
+    if (!Number.isFinite(age) || age > LIVE_SAMPLE_MAX_AGE_MS || age < -SAMPLE_CLOCK_SKEW_MS
+      || timestamp < this.lastSensorTime[source]) return;
+    this.lastSensorTime[source] = timestamp;
     // Device outputs and readiness flags belong to monitoring, not model features.
     const sample: AiSensorSample = {
       sample_id: reading.id, timestamp: reading.recordedAt.toISOString(), source,
@@ -62,7 +68,15 @@ export class AiCoordinator {
   }
 
   getLatest(): StoredAiPrediction | null {
-    return this.latest;
+    const { live, simulation } = this.latestBySource;
+    if (live) {
+      // Camera/status updates must not renew the age of an old physical sensor sample.
+      const age = this.clock.now().getTime() - Date.parse(live.sensor_timestamp ?? live.timestamp);
+      if (age >= -SAMPLE_CLOCK_SKEW_MS && age <= LIVE_SAMPLE_MAX_AGE_MS) return live;
+    }
+    if (!live) return simulation;
+    if (!simulation) return live;
+    return Date.parse(live.timestamp) >= Date.parse(simulation.timestamp) ? live : simulation;
   }
 
   getHistory(limit: number): StoredAiPrediction[] {
@@ -140,6 +154,14 @@ export class AiCoordinator {
     return faces;
   }
 
+  async enrollFaces(request: FaceEnrollmentRequest) {
+    if (!this.gateway.enrollFaces) throw new Error('Le service facial est indisponible.');
+    const revision = ++this.visionRevision;
+    const result = await this.gateway.enrollFaces(request);
+    if (revision === this.visionRevision && !this.closed) this.updateFaces(result.catalog);
+    return result;
+  }
+
   private updateFaces(faces: FaceRecognitionResult) {
     if (!this.state.vision) return;
     if (this.state.vision.faces && Date.parse(faces.timestamp) < Date.parse(this.state.vision.faces.timestamp)) return;
@@ -158,7 +180,8 @@ export class AiCoordinator {
     try {
       while (this.queue.length && !this.closed) {
         const sample = this.queue.shift()!;
-        if (this.clock.now().getTime() - Date.parse(sample.timestamp) > LIVE_SAMPLE_MAX_AGE_MS) {
+        const age = this.clock.now().getTime() - Date.parse(sample.timestamp);
+        if (!Number.isFinite(age) || age > LIVE_SAMPLE_MAX_AGE_MS || age < -SAMPLE_CLOCK_SKEW_MS) {
           this.state.dropped_samples += 1;
           continue;
         }
@@ -168,7 +191,7 @@ export class AiCoordinator {
           if (this.closed) break;
           this.succeeded(prediction.anomaly.status === 'ready'
             || (prediction.anomaly.status !== 'untrained' && this.state.model_loaded),
-            revision === this.visionRevision ? prediction.vision : this.state.vision ?? prediction.vision);
+            sample.source === 'simulation' || revision !== this.visionRevision ? this.state.vision : prediction.vision);
           this.record(prediction);
         } catch (error) {
           if (!this.closed) this.failed(error);
@@ -181,15 +204,23 @@ export class AiCoordinator {
   }
 
   private record(prediction: AiPrediction) {
-    if (this.latest && Date.parse(prediction.timestamp) < Date.parse(this.latest.timestamp)) return;
-    if (this.latest?.timestamp === prediction.timestamp && this.latest.sample_id === prediction.sample_id) return;
-    this.latest = this.repository.save(prediction);
-    this.events.publish({ type: 'ai', prediction: this.latest });
+    const key = this.predictionKey(prediction);
+    if (this.recordedKeys.has(key)) return;
+    const stored = this.repository.save(prediction);
+    this.recordedKeys.add(key);
+    if (this.recordedKeys.size > MAX_HISTORY) this.recordedKeys.delete(this.recordedKeys.values().next().value!);
+    const previous = this.latestBySource[prediction.source];
+    if (!previous || Date.parse(prediction.timestamp) >= Date.parse(previous.timestamp)) this.latestBySource[prediction.source] = stored;
+    this.events.publish({ type: 'ai', prediction: stored });
     console.info(`[AI] Prediction stored: ${prediction.risk.risk_level} score=${prediction.risk.risk_score}.`);
   }
 
-  private succeeded(modelLoaded: boolean, vision: VisionResult) {
-    if (this.state.vision && Date.parse(vision.timestamp) < Date.parse(this.state.vision.timestamp)) vision = this.state.vision;
+  private predictionKey(prediction: AiPrediction): string {
+    return `${prediction.source}:${prediction.timestamp}:${prediction.sample_id ?? 'vision'}`;
+  }
+
+  private succeeded(modelLoaded: boolean, vision: VisionResult | null) {
+    if (this.state.vision && vision && Date.parse(vision.timestamp) < Date.parse(this.state.vision.timestamp)) vision = this.state.vision;
     this.state = { ...this.state, online: true, model_loaded: modelLoaded, vision,
       last_success_at: this.clock.now().toISOString(), last_error: null };
     this.publishStatus();

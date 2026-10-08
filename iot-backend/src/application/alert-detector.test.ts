@@ -18,12 +18,49 @@ test('ignores readings replayed after an outage', () => {
   assert.equal(detector.fromEvent(reading(true, new Date('2026-10-06T09:55:00Z')), now), null);
 });
 
+test('a recent out-of-order PIR reading cannot create an intrusion', () => {
+  const detector = new AlertDetector();
+  assert.equal(detector.fromEvent(reading(false), now), null);
+  assert.equal(detector.fromEvent(reading(true, new Date(+now - 20_000)), now), null);
+  assert.equal(detector.fromEvent(reading(true, new Date(+now + 1_000)), new Date(+now + 1_000))?.type, 'intrusion');
+});
+
+test('an older PIR clear cannot reset an active intrusion and create a duplicate alert', () => {
+  const detector = new AlertDetector();
+  assert.equal(detector.fromEvent(reading(true), now)?.type, 'intrusion');
+  assert.equal(detector.fromEvent(reading(false, new Date(+now - 20_000)), now), null);
+  assert.equal(detector.fromEvent(reading(true, new Date(+now + 1_000)), new Date(+now + 1_000)), null);
+  assert.equal(detector.fromEvent(reading(false, new Date(+now + 2_000)), new Date(+now + 2_000)), null);
+  assert.equal(detector.fromEvent(reading(true, new Date(+now + 3_000)), new Date(+now + 3_000))?.type, 'intrusion');
+});
+
+test('simulated sensor events cannot trigger notifications or mutate the physical PIR baseline', () => {
+  const detector = new AlertDetector();
+  assert.equal(detector.fromEvent({ ...reading(true), source: 'simulation' }, now), null);
+  const simulated = reading(true);
+  assert.equal(detector.fromEvent({ ...simulated, reading: { ...simulated.reading, source: 'simulation' } }, now), null);
+  assert.equal(detector.fromEvent(reading(true), now)?.type, 'intrusion');
+  assert.equal(detector.fromEvent({ ...reading(false), source: 'simulation' }, now), null);
+  assert.equal(detector.fromEvent(reading(true), now), null);
+});
+
 test('ignores PIR activity during warmup and alerts only once the sensor is ready', () => {
   const detector = new AlertDetector();
   const presence = reading(true);
   assert.equal(detector.fromEvent({ ...presence, reading: { ...presence.reading, pirReady: false } }, now), null);
   assert.equal(detector.fromEvent({ ...presence, reading: { ...presence.reading, pirReady: true } }, now)?.type, 'intrusion');
   assert.equal(detector.fromEvent({ ...presence, reading: { ...presence.reading, pirReady: true } }, now), null);
+});
+
+test('physical PIR calibration establishes a fresh baseline after a restart', () => {
+  const detector = new AlertDetector();
+  assert.equal(detector.fromEvent(reading(true), now)?.type, 'intrusion');
+  const calibrationTime = new Date(+now + 1_000);
+  assert.equal(detector.fromEvent({ type: 'reading', reading: { id: 2, recordedAt: calibrationTime,
+    pirReady: false } }, calibrationTime), null);
+  assert.equal(detector.fromEvent(reading(true), calibrationTime), null);
+  const ready = reading(true, new Date(+now + 2_000));
+  assert.equal(detector.fromEvent({ ...ready, reading: { ...ready.reading, pirReady: true } }, ready.reading.recordedAt)?.type, 'intrusion');
 });
 
 test('raises an alert for an unknown face only', () => {
@@ -34,6 +71,17 @@ test('raises an alert for an unknown face only', () => {
   });
   assert.equal(detector.fromEvent(vision('Alice'), now), null);
   assert.equal(detector.fromEvent(vision(null), now)?.type, 'unknown-face');
+});
+
+test('simulated vision and far-future observations never produce real alerts', () => {
+  const detector = new AlertDetector();
+  const detection = { detectedAt: now, persons: 1, faces: [{ name: null, confidence: 0.8 }] };
+  assert.equal(detector.fromEvent({ type: 'vision', detection: { ...detection, source: 'simulation' } }, now), null);
+  const tomorrow = new Date(+now + 24 * 3600_000);
+  assert.equal(detector.fromEvent({ type: 'vision', detection: { ...detection, detectedAt: tomorrow } }, now), null);
+  assert.equal(detector.fromEvent(reading(true, tomorrow), now), null);
+  assert.equal(detector.fromEvent(reading(true), now)?.type, 'intrusion');
+  assert.equal(detector.fromEvent({ type: 'vision', detection }, now)?.type, 'unknown-face');
 });
 
 test('raises an offline alert once per silence', () => {

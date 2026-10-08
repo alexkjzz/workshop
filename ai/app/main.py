@@ -1,14 +1,19 @@
 """Local FastAPI transport; the browser communicates exclusively with Express."""
 import asyncio
 import hmac
+import json
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from .config import Settings
 from .schemas.sensor import SensorSample
+from .schemas.face import FaceEnrollmentRequest, MAX_FACE_BODY_BYTES
+from .vision.face_enrollment import EnrollmentError
+from .vision.face_recognition import FaceUnavailable
 from .service import AiEngine
 from .utils.health import health_status
 from .utils.logger import configure_logging
@@ -89,6 +94,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @api.post("/vision/faces/reload", dependencies=[Depends(authorized)])
     def face_reload():
         return engine.camera.faces.reload()
+
+    @api.post("/vision/faces/enroll", dependencies=[Depends(authorized)])
+    async def face_enroll(request: Request):
+        if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+            raise HTTPException(status_code=415, detail="Envoyez les photos au format JSON.")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_FACE_BODY_BYTES:
+                raise HTTPException(status_code=413, detail="Envoi trop volumineux : maximum 15 Mio de photos.")
+            body.extend(chunk)
+        try:
+            payload = FaceEnrollmentRequest.model_validate(json.loads(body.decode("utf-8")))
+        except (ValueError, UnicodeError) as error:
+            # Validation errors must not echo the base64 image or request body.
+            detail = "Nom et une à cinq photos JPEG, PNG ou WebP sont requis."
+            if isinstance(error, ValidationError):
+                detail = "; ".join(str(item["msg"]) for item in error.errors(include_input=False, include_url=False))
+            raise HTTPException(status_code=422, detail=detail) from None
+        try:
+            return await asyncio.to_thread(engine.camera.faces.enroll, payload)
+        except EnrollmentError as error:
+            raise HTTPException(status_code=error.status_code, detail=str(error)) from None
+        except FaceUnavailable as error:
+            raise HTTPException(status_code=503, detail=str(error)) from None
+        except OSError:
+            raise HTTPException(status_code=503, detail="Impossible d'enregistrer les photos dans le catalogue local.") from None
 
     @api.get("/risk/latest", dependencies=[Depends(authorized)])
     def latest_risk():

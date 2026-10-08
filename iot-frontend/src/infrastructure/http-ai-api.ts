@@ -1,7 +1,8 @@
 import type { AiApi } from '../application/ports';
 import type { AiPrediction, AiStatus, AiVisionResult } from '../domain/ai';
-import type { FaceDetection, FaceLatest, FaceRecognitionResult } from '../domain/faces';
-import { jsonBody, requestJson } from './http-client';
+import type { FaceDetection, FaceEnrollmentResponse, FaceLatest, FaceRecognitionResult } from '../domain/faces';
+import { faceEnrollmentPayload } from './face-enrollment-payload.ts';
+import { jsonBody, requestJson } from './http-client.ts';
 
 // The backend owns AI availability, persistence and access to the local webcam.
 export class HttpAiApi implements AiApi {
@@ -46,5 +47,21 @@ export class HttpAiApi implements AiApi {
     return requestJson<FaceRecognitionResult>('/api/ai/vision/faces/reload', {
       ...jsonBody('POST', {}), signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     }, 'Impossible de recharger les visages connus.');
+  }
+
+  async enrollFaces(name: string, files: File[], signal?: AbortSignal) {
+    const timeout = AbortSignal.timeout(65000);
+    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    try {
+      const payload = await faceEnrollmentPayload(name, files, combined);
+      return await requestJson<FaceEnrollmentResponse>('/api/ai/vision/faces/enroll', {
+        ...jsonBody('POST', payload), signal: combined,
+      }, 'Impossible d’ajouter les photos de cette personne.');
+    } catch (failure) {
+      if (timeout.aborted && !signal?.aborted) {
+        throw new Error('L’ajout des photos prend trop de temps. Vérifiez le catalogue avant de réessayer.');
+      }
+      throw failure;
+    }
   }
 }

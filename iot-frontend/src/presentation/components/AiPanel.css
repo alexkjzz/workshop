@@ -1,36 +1,60 @@
 .ai-panel {
-  margin-top: 32px;
+  min-width: 0;
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.ai-panel > .section-heading {
+  margin-bottom: 20px;
 }
 
 .ai-panel h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .ai-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 24px;
-  margin: 0;
+  gap: 12px;
+  margin: 20px 0 0;
 }
 
 .ai-metric {
   min-width: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface-raised);
 }
 
 .ai-metric dt {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .ai-metric dd {
-  margin: 5px 0 0;
-  font-size: 17px;
-  font-weight: 600;
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.ai-metric--alert {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
 .ai-metric--alert dd {
@@ -39,50 +63,75 @@
 
 .ai-panel small {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 400;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .ai-notice,
 .ai-error {
   margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
   font-size: 13px;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 
 .ai-notice {
-  color: var(--text-muted);
+  color: var(--text-soft);
+  background: var(--surface-raised);
 }
 
 .ai-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
   color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
 }
 
 .ai-analysis {
-  margin-top: 16px;
+  margin-top: 22px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  color: var(--text-soft);
   font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .ai-analysis p {
-  margin: 6px 0;
+  margin: 8px 0;
 }
 
 .ai-analysis p > span {
   display: inline-block;
-  min-width: 145px;
+  min-width: 150px;
+  padding-right: 16px;
   color: var(--text-muted);
 }
 
 .ai-reasons {
-  margin: 12px 0 0;
-  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 0 0;
+  padding-left: 20px;
   color: var(--text-soft);
 }
 
+.ai-reasons li::marker {
+  color: var(--accent);
+}
+
 .ai-vision {
+  min-width: 0;
   margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
 }
 
 .ai-vision-state,
@@ -90,46 +139,71 @@
   margin: 8px 0 0;
   color: var(--text-muted);
   font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .ai-vision .camera-feed {
-  max-width: 480px;
+  max-width: 640px;
 }
 
 .ai-performance {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin: 16px 0 0;
-  font-size: 13px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 640px;
+  margin: 18px 0 0;
+  font-size: 12px;
+}
+
+.ai-performance > div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface-raised);
 }
 
 .ai-performance dt {
   color: var(--text-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .ai-performance dd {
-  margin: 3px 0 0;
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .ai-events {
+  min-width: 0;
   margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
 }
 
 .ai-events .history {
-  max-height: 300px;
+  max-height: 320px;
+  margin-top: 14px;
+}
+
+.ai-events table {
+  min-width: 580px;
 }
 
 .ai-events th,
 .ai-events td {
-  padding-right: 12px;
   vertical-align: top;
 }
 
 .ai-events th:first-child,
 .ai-events td:first-child {
-  width: 145px;
+  width: 150px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ai-events td:last-child {
@@ -137,16 +211,39 @@
 }
 
 @media (max-width: 640px) {
+  .ai-panel {
+    padding: 18px;
+  }
+
   .ai-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 16px;
+    gap: 10px;
   }
 
-  .ai-events .history {
-    overflow-x: auto;
+  .ai-metric {
+    padding: 12px;
   }
 
-  .ai-events table {
-    min-width: 520px;
+  .ai-metric dd {
+    font-size: 16px;
+  }
+
+  .ai-metric dt,
+  .ai-panel small {
+    font-size: 11px;
+  }
+
+  .ai-analysis p > span {
+    display: block;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .ai-performance {
+    gap: 8px;
+  }
+
+  .ai-performance > div {
+    padding: 10px 8px;
   }
 }

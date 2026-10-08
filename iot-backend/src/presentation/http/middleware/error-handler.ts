@@ -21,6 +21,8 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, nex
     response.status(503).json({ message: error.message });
   } else if (error instanceof CommandDeliveryError || error instanceof MailDeliveryError) {
     response.status(502).json({ message: error.message });
+  } else if (error && typeof error === 'object' && error.type === 'entity.too.large') {
+    response.status(413).json({ message: 'Request body exceeds the allowed size.' });
   } else if (error instanceof SyntaxError) {
     response.status(400).json({ message: 'Request body must be valid JSON.' });
   } else {
